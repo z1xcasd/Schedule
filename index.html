@@ -69,6 +69,13 @@ textarea{min-height:92px;resize:vertical}
 .act-sub{color:var(--muted);font-size:15px;margin:2px 0 8px}
 .act{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;padding:15px 4px}
 .act.danger{color:var(--danger)}
+.wstep{color:var(--muted);font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:5px 11px;font:inherit;font-size:14px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip.skip{color:var(--muted)}
+.wstate{min-height:22px;margin-top:8px;font-size:14px;color:var(--muted)}
+.wstate.on{color:var(--accent)}
+.wstate.err{color:var(--warn)}
 </style>
 </head>
 <body>
@@ -84,23 +91,20 @@ textarea{min-height:92px;resize:vertical}
   <button class="side" id="btnRef" aria-label="รีเฟรช">↻</button>
 </div>
 
-<!-- กำลังฟัง -->
-<div class="sheet-bg" id="bgListen"><div class="sheet listen">
-  <div class="pulse"></div>
-  <div class="transcript" id="transcript">พูดได้เลย…</div>
-  <div class="btns">
-    <button class="btn ghost" id="lCancel">ยกเลิก</button>
-    <button class="btn" id="lStop">เสร็จแล้ว</button>
+<!-- ทีละหัวข้อ -->
+<div class="sheet-bg" id="bgWiz"><div class="sheet">
+  <div class="wstep" id="wStep"></div>
+  <h2 id="wLabel"></h2>
+  <div class="chips" id="wChips"></div>
+  <input id="wInput" enterkeyhint="next" autocomplete="off" autocapitalize="off">
+  <div class="wstate" id="wState"></div>
+  <div class="btns" style="margin-top:12px">
+    <button class="btn ghost" id="wMic">🎤 พูด</button>
+    <button class="btn ghost" id="wSkip">ข้าม</button>
   </div>
-</div></div>
-
-<!-- พิมพ์แทน -->
-<div class="sheet-bg" id="bgType"><div class="sheet">
-  <h2>พิมพ์นัดหมาย</h2>
-  <textarea id="typed" placeholder="เช่น วันที่ 19 ตุลา 0930 ประชุมหารือข้อขัดห้อง ห้องประชุม บก.ศสร. ผบ.ศสร. ประธาน"></textarea>
-  <div class="btns">
-    <button class="btn ghost" data-close="bgType">ปิด</button>
-    <button class="btn" id="tGo">แยกข้อความ</button>
+  <div class="btns" style="margin-top:10px">
+    <button class="btn ghost" id="wCancel">ยกเลิก</button>
+    <button class="btn" id="wNext">ถัดไป</button>
   </div>
 </div></div>
 
@@ -258,58 +262,138 @@ $('aDel').onclick = async () => {
   catch(e){ toast(e.message, 4000); }
 };
 
-/* ---------- เสียง ---------- */
+/* ---------- ทีละหัวข้อ (พูดหรือพิมพ์) ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, finalText = '', cancelled = false;
+const STEPS = [
+  { k:'when',     label:'วันที่และเวลา', ph:'เช่น 14 ตุลา 0830', req:true },
+  { k:'title',    label:'เรื่อง',         ph:'เช่น ประชุม MB', req:true },
+  { k:'location', label:'สถานที่',        ph:'เช่น ห้องประชุม 1 บก.ศสร.' },
+  { k:'chair',    label:'ประธาน',         ph:'เช่น รอง ผบ.ศสร. 1' },
+  { k:'dress',    label:'การแต่งกาย',     ph:'เช่น ชุดปกติกากีแกมเขียวคอพับแขนยาว' }
+];
+let wz = { i:0, vals:{}, voice:true, tok:0, busy:false, t0:0, err:'' }, rec = null;
 
-function startVoice(){
-  if (!SR){ toast('เบราว์เซอร์นี้ไม่รองรับเสียง ใช้ปุ่มพิมพ์แทน'); open('bgType'); return; }
-  finalText = ''; cancelled = false;
-  $('transcript').textContent = 'พูดได้เลย…';
-  rec = new SR(); rec.lang = 'th-TH'; rec.interimResults = true; rec.continuous = false;
-  rec.onresult = e => {
-    let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-    finalText = t; $('transcript').textContent = t;
-  };
-  rec.onerror = e => { if (e.error !== 'aborted' && e.error !== 'no-speech') toast('ไมค์ใช้ไม่ได้: ' + e.error); };
-  rec.onend = () => {
-    close('bgListen');
-    if (!cancelled && finalText.trim()) handleText(finalText.trim());
-  };
-  try { rec.start(); open('bgListen'); } catch(e){ toast('เริ่มฟังไม่ได้'); }
+function spell(t){
+  return t.replace(/\([^)]*\)|（[^）]*）/g, ' ').replace(/บอ[\s-]*กอ/g, 'บก.').replace(/\s+/g, ' ').trim();
 }
-$('btnAdd').onclick = startVoice;
-$('lStop').onclick = () => rec && rec.stop();
-$('lCancel').onclick = () => { cancelled = true; if (rec) rec.abort(); close('bgListen'); };
+function wState(msg, cls){ const e = $('wState'); e.textContent = msg || ''; e.className = 'wstate' + (cls ? ' ' + cls : ''); }
+function stopRec(){ wz.tok++; if (rec){ try{ rec.abort(); }catch(e){} rec = null; } $('wMic').textContent = '🎤 พูด'; }
 
-/* ---------- พิมพ์แทน ---------- */
-$('btnType').onclick = () => open('bgType');
-$('tGo').onclick = () => {
-  const t = $('typed').value.trim(); if (!t) return;
-  close('bgType'); handleText(t); $('typed').value = '';
-};
-$('btnRef').onclick = () => { toast('กำลังรีเฟรช…', 1200); refresh(); };
+function showStep(){
+  const st = STEPS[wz.i];
+  $('wStep').textContent = 'ขั้นที่ ' + (wz.i + 1) + '/' + STEPS.length + (st.req ? '' : ' (ข้ามได้)');
+  $('wLabel').textContent = st.label;
+  $('wInput').value = ''; $('wInput').placeholder = st.ph;
+  $('wSkip').style.display = st.req ? 'none' : '';
+  $('wNext').textContent = wz.i === STEPS.length - 1 ? 'เสร็จ' : 'ถัดไป';
+  let h = '';
+  STEPS.forEach((x, i) => {
+    const v = wz.vals[x.k]; if (v === undefined || i === wz.i) return;
+    const txt = x.k === 'when' ? v.date.slice(8) + '/' + v.date.slice(5, 7) + ' ' + v.time : v;
+    h += `<button class="chip${txt ? '' : ' skip'}" data-i="${i}">${esc(x.label)}: ${esc(txt || 'ข้าม')} ✎</button>`;
+  });
+  $('wChips').innerHTML = h;
+  $('wChips').querySelectorAll('.chip').forEach(c => c.onclick = () => redo(+c.dataset.i));
+  wState('');
+}
+function redo(i){
+  stopRec(); delete wz.vals[STEPS[i].k]; wz.i = i; showStep();
+  if (wz.voice) listen(); else $('wInput').focus();
+}
+function advance(){
+  const n = STEPS.findIndex(x => wz.vals[x.k] === undefined);
+  if (n < 0){ finish(); return; }
+  wz.i = n; showStep();
+  if (wz.voice) listen(); else $('wInput').focus();
+}
 
-/* ---------- แยกข้อความ → ยืนยัน ---------- */
-async function handleText(text){
-  rawText = text; editId = ''; toast('กำลังแยกข้อความ…', 8000);
+function listen(){
+  const my = ++wz.tok;
+  if (!SR){ wz.voice = false; wState('เบราว์เซอร์นี้ไม่รองรับเสียง พิมพ์แล้วกด Enter', 'err'); $('wInput').focus(); return; }
+  wz.t0 = Date.now(); wz.err = '';
+  let r;
   try{
-    const d = await api('parse', { text });
-    $('toast').classList.remove('show');
-    $('cRaw').textContent = '“' + text + '”';
-    $('cTitle').value = d.title || ''; $('cDate').value = d.date || '';
-    $('cTime').value = d.time || ''; $('cLoc').value = d.location || '';
-    $('cChair').value = d.chair || ''; $('cDress').value = d.dress || ''; $('cDet').value = d.details || '';
-    const need = [];
-    if (!d.date) need.push('วันที่'); if (!d.time) need.push('เวลา'); if (!d.title) need.push('เรื่อง');
-    const hint = $('cHint');
-    const msgs = [];
-    if (d.source === 'rules') msgs.push('ใช้ตัวแยกแบบง่าย (ไม่ได้ตั้ง Gemini) กรุณาตรวจทุกช่อง');
-    if (need.length) msgs.push('กรอก ' + need.join(', ') + ' ให้ครบก่อนบันทึก');
-    hint.style.display = msgs.length ? 'block' : 'none'; hint.textContent = msgs.join(' · ');
-    open('bgConfirm');
-  }catch(e){ toast(e.message, 4000); }
+    r = new SR(); r.lang = 'th-TH'; r.interimResults = true; r.continuous = false;
+    r.onresult = e => {
+      if (my !== wz.tok) return;
+      let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      $('wInput').value = t;
+    };
+    r.onerror = e => { if (my === wz.tok) wz.err = e.error; };
+    r.onend = () => {
+      if (my !== wz.tok) return;
+      rec = null; $('wMic').textContent = '🎤 พูด';
+      const t = $('wInput').value.trim(), st = STEPS[wz.i];
+      if (t){ commit(); return; }
+      if (!st.req && !wz.err && Date.now() - wz.t0 > 2500){ skip(); return; }
+      if (wz.err === 'not-allowed' || wz.err === 'service-not-allowed') wState('ไมค์ถูกบล็อก — อนุญาตไมค์ หรือพิมพ์แล้วกด Enter', 'err');
+      else wState('ไม่ได้ยิน — แตะ 🎤 เพื่อพูดอีกครั้ง หรือพิมพ์แล้วกด Enter', 'err');
+    };
+    rec = r; r.start();
+    $('wMic').textContent = '⏹ หยุด'; wState('🎤 กำลังฟัง… พูดได้เลย', 'on');
+  }catch(e){
+    rec = null; $('wMic').textContent = '🎤 พูด';
+    wState('แตะ 🎤 เพื่อเริ่มพูด หรือพิมพ์แล้วกด Enter', 'err');
+  }
 }
+
+function skip(){
+  if (STEPS[wz.i].req) return;
+  stopRec(); wz.vals[STEPS[wz.i].k] = ''; advance();
+}
+async function commit(){
+  if (wz.busy) return;
+  const st = STEPS[wz.i]; let t = $('wInput').value.trim();
+  stopRec();
+  if (!t){
+    if (st.req){ wState('หัวข้อนี้ต้องมี — พูดหรือพิมพ์ก่อน', 'err'); if (wz.voice) listen(); return; }
+    skip(); return;
+  }
+  if (!st.req && /^(ข้าม|ไม่มี|ไม่ระบุ)$/.test(t.replace(/\s/g, ''))){ skip(); return; }
+  if (st.k === 'when'){
+    wz.busy = true; wState('กำลังอ่านวันที่/เวลา…');
+    try{
+      const d = await api('parse', { text: t });
+      if (!d.date || !d.time){
+        wState('จับ' + (!d.date && !d.time ? 'วันที่และเวลา' : !d.date ? 'วันที่' : 'เวลา') + 'ไม่ได้ ลองใหม่ เช่น 14 ตุลา 0830', 'err');
+        wz.busy = false; if (wz.voice) listen(); else $('wInput').focus(); return;
+      }
+      wz.vals.when = { date: d.date, time: d.time, text: t };
+    }catch(e){ wState(e.message, 'err'); wz.busy = false; return; }
+    wz.busy = false;
+  } else {
+    wz.vals[st.k] = spell(t);
+  }
+  advance();
+}
+function finish(){
+  stopRec(); close('bgWiz');
+  const v = wz.vals;
+  rawText = STEPS.map(x => x.k === 'when' ? (v.when && v.when.text) : v[x.k]).filter(Boolean).join(' / ');
+  editId = '';
+  $('cRaw').textContent = '“' + rawText + '”';
+  $('cTitle').value = v.title || ''; $('cDate').value = v.when.date; $('cTime').value = v.when.time;
+  $('cLoc').value = v.location || ''; $('cChair').value = v.chair || ''; $('cDress').value = v.dress || ''; $('cDet').value = '';
+  $('cHint').style.display = 'none';
+  open('bgConfirm');
+}
+function openWiz(voice){
+  stopRec(); wz = { i:0, vals:{}, voice, tok:wz.tok + 1, busy:false, t0:0, err:'' };
+  open('bgWiz'); showStep();
+  if (voice) listen(); else $('wInput').focus();
+}
+$('btnAdd').onclick = () => openWiz(true);
+$('btnType').onclick = () => openWiz(false);
+$('wMic').onclick = () => { if (rec){ stopRec(); wState('หยุดแล้ว — กด ถัดไป/Enter หรือแตะ 🎤 อีกครั้ง'); } else { wz.voice = true; $('wInput').blur(); listen(); } };
+$('wNext').onclick = commit;
+$('wSkip').onclick = skip;
+$('wCancel').onclick = () => { stopRec(); close('bgWiz'); };
+$('wInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); wz.voice = false; commit(); }
+});
+$('wInput').addEventListener('input', () => { if (!rec) return; });
+
+$('btnRef').onclick = () => { toast('กำลังรีเฟรช…', 1200); refresh(); };
 
 $('cSave').onclick = async () => {
   const d = { title: $('cTitle').value.trim(), date: $('cDate').value, time: $('cTime').value,
