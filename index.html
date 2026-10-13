@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ตารางงาน">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="apple-touch-icon.png">
 <title>ตารางงาน</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -58,6 +63,12 @@ textarea{min-height:92px;resize:vertical}
 .transcript{min-height:56px;font-size:19px;line-height:1.5;word-break:break-word}
 .toast{position:fixed;left:50%;bottom:130px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:99px;font-size:15px;z-index:40;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88vw;text-align:center}
 .toast.show{opacity:1}
+.item{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;transition:transform .15s,opacity .15s}
+.item.press{transform:scale(.98);opacity:.85}
+.act-title{font-weight:700;font-size:19px}
+.act-sub{color:var(--muted);font-size:15px;margin:2px 0 8px}
+.act{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;padding:15px 4px}
+.act.danger{color:var(--danger)}
 </style>
 </head>
 <body>
@@ -122,6 +133,17 @@ textarea{min-height:92px;resize:vertical}
   </div>
 </div></div>
 
+<!-- เมนูกดค้างที่งาน -->
+<div class="sheet-bg" id="bgAct"><div class="sheet">
+  <div class="act-title" id="aTitle"></div>
+  <div class="act-sub" id="aSub"></div>
+  <button class="act" id="aHour">⏩ เลื่อน +1 ชั่วโมง</button>
+  <button class="act" id="aTomorrow">⏩ เลื่อนไปพรุ่งนี้ (เวลาเดิม)</button>
+  <button class="act" id="aEdit">✎ แก้ไข / เลือกวัน-เวลาใหม่</button>
+  <button class="act danger" id="aDel">✕ ยกเลิกนัด</button>
+  <div class="btns"><button class="btn ghost" data-close="bgAct">ปิด</button></div>
+</div></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -131,12 +153,12 @@ const store = {
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
 };
 let cfg = { url: store.get('url'), token: store.get('token') };
-let rawText = '';
+let rawText = '', items = [], editId = '', cur = null;
 
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function toast(msg, ms=2600){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),ms); }
 function open(id){ $(id).classList.add('show'); }
-function close(id){ $(id).classList.remove('show'); }
+function close(id){ $(id).classList.remove('show'); if (id === 'bgConfirm') editId = ''; }
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => close(b.dataset.close));
 
 const todayISO = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' });
@@ -154,25 +176,84 @@ function fmtDay(d){
   return new Date(d + 'T00:00:00+07:00').toLocaleDateString('th-TH',
     { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'Asia/Bangkok' });
 }
+function render(){
+  const el = $('list');
+  const now = Date.now();
+  const list = items.filter(it => it.endMs > now);   // งานที่ผ่านไปแล้วหายจากหน้านี้ (ยังอยู่ในปฏิทิน)
+  if (!list.length){ el.innerHTML = '<div class="empty">ไม่มีนัดที่จะถึง<br>กด + แล้วพูดได้เลย</div>'; return; }
+  const t = todayISO(); let html = '', last = '';
+  for (const it of list){
+    if (it.date !== last){
+      last = it.date;
+      html += `<div class="day">${esc(fmtDay(it.date))}${it.date===t?'<span class="today">วันนี้</span>':''}</div>`;
+    }
+    const sub = [it.location, it.details].filter(Boolean).map(esc).join(' · ');
+    html += `<div class="item" data-id="${esc(it.id)}"><div class="t">${esc(it.time)}</div><div class="b"><div class="title">${esc(it.title)}</div>${sub?`<div class="sub">${sub}</div>`:''}</div></div>`;
+  }
+  el.innerHTML = html;
+  el.querySelectorAll('.item').forEach(bindPress);
+}
 async function refresh(){
   const el = $('list');
   if (!cfg.url || !cfg.token) { el.innerHTML = '<div class="empty">ยังไม่ได้ตั้งค่า<br>กด ⚙︎ ที่มุมขวาบน</div>'; return; }
   try{
-    const items = await api('list');
-    if (!items.length){ el.innerHTML = '<div class="empty">ยังไม่มีนัดที่จะถึง<br>กด + แล้วพูดได้เลย</div>'; return; }
+    items = await api('list');
     items.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
-    const t = todayISO(); let html = '', last = '';
-    for (const it of items){
-      if (it.date !== last){
-        last = it.date;
-        html += `<div class="day">${esc(fmtDay(it.date))}${it.date===t?'<span class="today">วันนี้</span>':''}</div>`;
-      }
-      const sub = [it.location, it.details].filter(Boolean).map(esc).join(' · ');
-      html += `<div class="item"><div class="t">${esc(it.time)}</div><div class="b"><div class="title">${esc(it.title)}</div>${sub?`<div class="sub">${sub}</div>`:''}</div></div>`;
-    }
-    el.innerHTML = html;
+    render();
   }catch(e){ el.innerHTML = `<div class="empty">โหลดไม่ได้<br>${esc(e.message)}</div>`; }
 }
+setInterval(render, 60000);
+
+/* ---------- กดค้างที่งาน ---------- */
+function bindPress(el){
+  let timer = null;
+  const cancel = () => { clearTimeout(timer); timer = null; el.classList.remove('press'); };
+  el.addEventListener('touchstart', () => {
+    el.classList.add('press');
+    timer = setTimeout(() => { cancel(); if (navigator.vibrate) navigator.vibrate(20); openAct(el.dataset.id); }, 500);
+  }, { passive: true });
+  el.addEventListener('touchmove', cancel, { passive: true });
+  el.addEventListener('touchend', cancel);
+  el.addEventListener('touchcancel', cancel);
+  el.addEventListener('contextmenu', e => { e.preventDefault(); cancel(); openAct(el.dataset.id); });
+}
+function openAct(id){
+  cur = items.find(i => i.id === id); if (!cur) return;
+  $('aTitle').textContent = cur.title;
+  $('aSub').textContent = fmtDay(cur.date) + ' · ' + cur.time;
+  open('bgAct');
+}
+function shift(it, addMs){
+  const d = new Date(new Date(it.date + 'T' + it.time + ':00+07:00').getTime() + addMs);
+  return {
+    date: d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' }),
+    time: d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  };
+}
+async function doMove(addMs){
+  close('bgAct'); toast('กำลังเลื่อน…', 8000);
+  const n = shift(cur, addMs);
+  try{
+    await api('update', { id: cur.id, title: cur.title, date: n.date, time: n.time, location: cur.location, details: cur.details });
+    toast('เลื่อนแล้ว ✓'); refresh();
+  }catch(e){ toast(e.message, 4000); }
+}
+$('aHour').onclick = () => doMove(3600000);
+$('aTomorrow').onclick = () => doMove(86400000);
+$('aEdit').onclick = () => {
+  close('bgAct'); editId = cur.id;
+  $('cRaw').textContent = 'แก้ไขนัด';
+  $('cTitle').value = cur.title; $('cDate').value = cur.date; $('cTime').value = cur.time;
+  $('cLoc').value = cur.location; $('cDet').value = cur.details;
+  $('cHint').style.display = 'none';
+  open('bgConfirm');
+};
+$('aDel').onclick = async () => {
+  if (!confirm('ยกเลิกนัด "' + cur.title + '" ?\nจะลบออกจากปฏิทินด้วย')) return;
+  close('bgAct'); toast('กำลังยกเลิก…', 8000);
+  try{ await api('delete', { id: cur.id }); toast('ยกเลิกนัดแล้ว ✓'); refresh(); }
+  catch(e){ toast(e.message, 4000); }
+};
 
 /* ---------- เสียง ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -208,7 +289,7 @@ $('btnRef').onclick = () => { toast('กำลังรีเฟรช…', 1200
 
 /* ---------- แยกข้อความ → ยืนยัน ---------- */
 async function handleText(text){
-  rawText = text; toast('กำลังแยกข้อความ…', 8000);
+  rawText = text; editId = ''; toast('กำลังแยกข้อความ…', 8000);
   try{
     const d = await api('parse', { text });
     $('toast').classList.remove('show');
@@ -228,14 +309,15 @@ async function handleText(text){
 
 $('cSave').onclick = async () => {
   const d = { title: $('cTitle').value.trim(), date: $('cDate').value, time: $('cTime').value,
-              location: $('cLoc').value.trim(), details: $('cDet').value.trim(), raw: rawText };
+              location: $('cLoc').value.trim(), details: $('cDet').value.trim(), raw: rawText, id: editId };
   ['cTitle','cDate','cTime'].forEach(i => $(i).classList.remove('need'));
   const miss = [['title','cTitle'],['date','cDate'],['time','cTime']].filter(([k]) => !d[k]);
   if (miss.length){ miss.forEach(([,i]) => $(i).classList.add('need')); toast('กรอกเรื่อง วันที่ เวลา ให้ครบ'); return; }
   const btn = $('cSave'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
   try{
-    await api('add', d);
-    close('bgConfirm'); toast('เพิ่มนัดแล้ว ✓'); refresh();
+    const wasEdit = !!editId;
+    await api(wasEdit ? 'update' : 'add', d);
+    close('bgConfirm'); toast(wasEdit ? 'แก้ไขแล้ว ✓' : 'เพิ่มนัดแล้ว ✓'); refresh();
   }catch(e){ toast(e.message, 4000); }
   btn.disabled = false; btn.textContent = 'บันทึกลงปฏิทิน';
 };
