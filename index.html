@@ -114,7 +114,9 @@ textarea{min-height:92px;resize:vertical}
     <div><label>เวลา</label><input id="cTime" type="time"></div>
   </div>
   <label>สถานที่</label><input id="cLoc">
-  <label>รายละเอียด</label><input id="cDet">
+  <label>ประธาน</label><input id="cChair" placeholder="เช่น รอง ผบ.ศสร. 1">
+  <label>การแต่งกาย</label><input id="cDress" placeholder="เช่น ชุดสีกากี">
+  <label>รายละเอียดอื่นๆ</label><input id="cDet">
   <div class="hint" id="cHint" style="display:none"></div>
   <div class="btns">
     <button class="btn ghost" data-close="bgConfirm">ยกเลิก</button>
@@ -187,8 +189,9 @@ function render(){
       last = it.date;
       html += `<div class="day">${esc(fmtDay(it.date))}${it.date===t?'<span class="today">วันนี้</span>':''}</div>`;
     }
-    const sub = [it.location, it.details].filter(Boolean).map(esc).join(' · ');
-    html += `<div class="item" data-id="${esc(it.id)}"><div class="t">${esc(it.time)}</div><div class="b"><div class="title">${esc(it.title)}</div>${sub?`<div class="sub">${sub}</div>`:''}</div></div>`;
+    const subs = [it.location, it.chair && 'ประธาน : ' + it.chair, it.dress && 'การแต่งกาย : ' + it.dress, it.details]
+      .filter(Boolean).map(x => `<div class="sub">${esc(x)}</div>`).join('');
+    html += `<div class="item" data-id="${esc(it.id)}"><div class="t">${esc(it.time)}</div><div class="b"><div class="title">${esc(it.title)}</div>${subs}</div></div>`;
   }
   el.innerHTML = html;
   el.querySelectorAll('.item').forEach(bindPress);
@@ -234,7 +237,7 @@ async function doMove(addMs){
   close('bgAct'); toast('กำลังเลื่อน…', 8000);
   const n = shift(cur, addMs);
   try{
-    await api('update', { id: cur.id, title: cur.title, date: n.date, time: n.time, location: cur.location, details: cur.details });
+    await api('update', { id: cur.id, title: cur.title, date: n.date, time: n.time, location: cur.location, chair: cur.chair, dress: cur.dress, details: cur.details });
     toast('เลื่อนแล้ว ✓'); refresh();
   }catch(e){ toast(e.message, 4000); }
 }
@@ -244,7 +247,7 @@ $('aEdit').onclick = () => {
   close('bgAct'); editId = cur.id;
   $('cRaw').textContent = 'แก้ไขนัด';
   $('cTitle').value = cur.title; $('cDate').value = cur.date; $('cTime').value = cur.time;
-  $('cLoc').value = cur.location; $('cDet').value = cur.details;
+  $('cLoc').value = cur.location; $('cChair').value = cur.chair || ''; $('cDress').value = cur.dress || ''; $('cDet').value = cur.details;
   $('cHint').style.display = 'none';
   open('bgConfirm');
 };
@@ -295,7 +298,8 @@ async function handleText(text){
     $('toast').classList.remove('show');
     $('cRaw').textContent = '“' + text + '”';
     $('cTitle').value = d.title || ''; $('cDate').value = d.date || '';
-    $('cTime').value = d.time || ''; $('cLoc').value = d.location || ''; $('cDet').value = d.details || '';
+    $('cTime').value = d.time || ''; $('cLoc').value = d.location || '';
+    $('cChair').value = d.chair || ''; $('cDress').value = d.dress || ''; $('cDet').value = d.details || '';
     const need = [];
     if (!d.date) need.push('วันที่'); if (!d.time) need.push('เวลา'); if (!d.title) need.push('เรื่อง');
     const hint = $('cHint');
@@ -309,7 +313,8 @@ async function handleText(text){
 
 $('cSave').onclick = async () => {
   const d = { title: $('cTitle').value.trim(), date: $('cDate').value, time: $('cTime').value,
-              location: $('cLoc').value.trim(), details: $('cDet').value.trim(), raw: rawText, id: editId };
+              location: $('cLoc').value.trim(), chair: $('cChair').value.trim(), dress: $('cDress').value.trim(),
+              details: $('cDet').value.trim(), raw: rawText, id: editId };
   ['cTitle','cDate','cTime'].forEach(i => $(i).classList.remove('need'));
   const miss = [['title','cTitle'],['date','cDate'],['time','cTime']].filter(([k]) => !d[k]);
   if (miss.length){ miss.forEach(([,i]) => $(i).classList.add('need')); toast('กรอกเรื่อง วันที่ เวลา ให้ครบ'); return; }
