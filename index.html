@@ -112,14 +112,14 @@ textarea{min-height:92px;resize:vertical}
 <div class="sheet-bg" id="bgConfirm"><div class="sheet">
   <h2>ตรวจสอบก่อนบันทึก</h2>
   <div class="raw" id="cRaw"></div>
-  <label>เรื่อง</label><input id="cTitle">
   <div class="row">
     <div><label>วันที่</label><input id="cDate" type="date"></div>
     <div><label>เวลา</label><input id="cTime" type="time"></div>
   </div>
-  <label>สถานที่</label><input id="cLoc">
-  <label>ประธาน</label><input id="cChair" placeholder="เช่น รอง ผบ.ศสร. 1">
-  <label>การแต่งกาย</label><input id="cDress" placeholder="เช่น ชุดสีกากี">
+  <label>เรื่อง</label><input id="cTitle" enterkeyhint="next">
+  <label>สถานที่</label><input id="cLoc" enterkeyhint="next">
+  <label>ประธาน</label><input id="cChair" enterkeyhint="next" placeholder="เช่น รอง ผบ.ศสร. 1">
+  <label>การแต่งกาย</label><input id="cDress" enterkeyhint="next" placeholder="เช่น ชุดสีกากี">
   <label>รายละเอียดอื่นๆ</label><input id="cDet">
   <div class="hint" id="cHint" style="display:none"></div>
   <div class="btns">
@@ -262,7 +262,7 @@ $('aDel').onclick = async () => {
   catch(e){ toast(e.message, 4000); }
 };
 
-/* ---------- ทีละหัวข้อ (พูดหรือพิมพ์) ---------- */
+/* ---------- พูดทีละหัวข้อ (ไมค์ต่อเนื่อง) ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const STEPS = [
   { k:'when',     label:'วันที่และเวลา', ph:'เช่น 14 ตุลา 0830', req:true },
@@ -271,13 +271,22 @@ const STEPS = [
   { k:'chair',    label:'ประธาน',         ph:'เช่น รอง ผบ.ศสร. 1' },
   { k:'dress',    label:'การแต่งกาย',     ph:'เช่น ชุดปกติกากีแกมเขียวคอพับแขนยาว' }
 ];
-let wz = { i:0, vals:{}, voice:true, tok:0, busy:false, t0:0, err:'' }, rec = null;
+let wz = { i:0, vals:{}, voice:true, tok:0, busy:false, t0:0, err:'', seg:0, n:0, res:null, timer:null, skipT:null }, rec = null;
 
 function spell(t){
   return t.replace(/\([^)]*\)|（[^）]*）/g, ' ').replace(/บอ[\s-]*กอ/g, 'บก.').replace(/\s+/g, ' ').trim();
 }
 function wState(msg, cls){ const e = $('wState'); e.textContent = msg || ''; e.className = 'wstate' + (cls ? ' ' + cls : ''); }
-function stopRec(){ wz.tok++; if (rec){ try{ rec.abort(); }catch(e){} rec = null; } $('wMic').textContent = '🎤 พูด'; }
+function stopRec(){
+  wz.tok++; clearTimeout(wz.timer); clearTimeout(wz.skipT);
+  if (rec){ try{ rec.abort(); }catch(e){} rec = null; }
+  $('wMic').textContent = '🎤 พูด';
+}
+function segText(){
+  if (!wz.res) return '';
+  let t = ''; for (let i = wz.seg; i < wz.res.length; i++) t += wz.res[i][0].transcript;
+  return t.trim();
+}
 
 function showStep(){
   const st = STEPS[wz.i];
@@ -294,43 +303,52 @@ function showStep(){
   });
   $('wChips').innerHTML = h;
   $('wChips').querySelectorAll('.chip').forEach(c => c.onclick = () => redo(+c.dataset.i));
-  wState('');
+  clearTimeout(wz.skipT);
+  if (rec){
+    wState('🎤 กำลังฟัง… พูดได้เลย', 'on');
+    const t = segText(); if (t) $('wInput').value = t;
+    if (!st.req) wz.skipT = setTimeout(() => { if (rec && !wz.busy && !$('wInput').value.trim()) skip(); }, 6000);
+  } else wState('');
 }
 function redo(i){
-  stopRec(); delete wz.vals[STEPS[i].k]; wz.i = i; showStep();
-  if (wz.voice) listen(); else $('wInput').focus();
+  delete wz.vals[STEPS[i].k]; wz.i = i; wz.seg = wz.n; showStep();
+  if (wz.voice && !rec) listen(); else if (!wz.voice) $('wInput').focus();
 }
 function advance(){
   const n = STEPS.findIndex(x => wz.vals[x.k] === undefined);
   if (n < 0){ finish(); return; }
   wz.i = n; showStep();
-  if (wz.voice) listen(); else $('wInput').focus();
+  if (wz.voice && !rec) listen(); else if (!wz.voice) $('wInput').focus();
 }
 
 function listen(){
+  if (rec) return;
   const my = ++wz.tok;
   if (!SR){ wz.voice = false; wState('เบราว์เซอร์นี้ไม่รองรับเสียง พิมพ์แล้วกด Enter', 'err'); $('wInput').focus(); return; }
-  wz.t0 = Date.now(); wz.err = '';
-  let r;
+  wz.t0 = Date.now(); wz.err = ''; wz.seg = 0; wz.n = 0; wz.res = null;
   try{
-    r = new SR(); r.lang = 'th-TH'; r.interimResults = true; r.continuous = false;
+    const r = new SR(); r.lang = 'th-TH'; r.interimResults = true; r.continuous = true;
     r.onresult = e => {
       if (my !== wz.tok) return;
-      let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-      $('wInput').value = t;
+      wz.res = e.results; wz.n = e.results.length;
+      const t = segText();
+      if (!wz.busy) $('wInput').value = t;
+      clearTimeout(wz.timer); clearTimeout(wz.skipT);
+      if (t) wz.timer = setTimeout(() => { if (my === wz.tok && !wz.busy && segText()) commit(); }, 1600);
     };
     r.onerror = e => { if (my === wz.tok) wz.err = e.error; };
     r.onend = () => {
       if (my !== wz.tok) return;
       rec = null; $('wMic').textContent = '🎤 พูด';
-      const t = $('wInput').value.trim(), st = STEPS[wz.i];
-      if (t){ commit(); return; }
-      if (!st.req && !wz.err && Date.now() - wz.t0 > 2500){ skip(); return; }
-      if (wz.err === 'not-allowed' || wz.err === 'service-not-allowed') wState('ไมค์ถูกบล็อก — อนุญาตไมค์ หรือพิมพ์แล้วกด Enter', 'err');
-      else wState('ไม่ได้ยิน — แตะ 🎤 เพื่อพูดอีกครั้ง หรือพิมพ์แล้วกด Enter', 'err');
+      if (wz.err === 'not-allowed' || wz.err === 'service-not-allowed'){ wState('ไมค์ถูกบล็อก — อนุญาตไมค์ หรือพิมพ์แล้วกด Enter', 'err'); return; }
+      if (wz.voice && !wz.busy && Date.now() - wz.t0 > 1200){ listen(); if (rec) return; }
+      wState('ไมค์หยุด — แตะ 🎤 เพื่อพูดต่อ หรือพิมพ์แล้วกด Enter', 'err');
     };
     rec = r; r.start();
     $('wMic').textContent = '⏹ หยุด'; wState('🎤 กำลังฟัง… พูดได้เลย', 'on');
+    const st = STEPS[wz.i];
+    clearTimeout(wz.skipT);
+    if (!st.req) wz.skipT = setTimeout(() => { if (rec && !wz.busy && !$('wInput').value.trim()) skip(); }, 6000);
   }catch(e){
     rec = null; $('wMic').textContent = '🎤 พูด';
     wState('แตะ 🎤 เพื่อเริ่มพูด หรือพิมพ์แล้วกด Enter', 'err');
@@ -339,14 +357,14 @@ function listen(){
 
 function skip(){
   if (STEPS[wz.i].req) return;
-  stopRec(); wz.vals[STEPS[wz.i].k] = ''; advance();
+  wz.seg = wz.n; wz.vals[STEPS[wz.i].k] = ''; advance();
 }
 async function commit(){
   if (wz.busy) return;
-  const st = STEPS[wz.i]; let t = $('wInput').value.trim();
-  stopRec();
+  const st = STEPS[wz.i]; const t = $('wInput').value.trim();
+  wz.seg = wz.n; clearTimeout(wz.timer);
   if (!t){
-    if (st.req){ wState('หัวข้อนี้ต้องมี — พูดหรือพิมพ์ก่อน', 'err'); if (wz.voice) listen(); return; }
+    if (st.req){ wState('หัวข้อนี้ต้องมี — พูดหรือพิมพ์ก่อน', 'err'); return; }
     skip(); return;
   }
   if (!st.req && /^(ข้าม|ไม่มี|ไม่ระบุ)$/.test(t.replace(/\s/g, ''))){ skip(); return; }
@@ -356,7 +374,7 @@ async function commit(){
       const d = await api('parse', { text: t });
       if (!d.date || !d.time){
         wState('จับ' + (!d.date && !d.time ? 'วันที่และเวลา' : !d.date ? 'วันที่' : 'เวลา') + 'ไม่ได้ ลองใหม่ เช่น 14 ตุลา 0830', 'err');
-        wz.busy = false; if (wz.voice) listen(); else $('wInput').focus(); return;
+        wz.busy = false; if (!wz.voice) $('wInput').focus(); return;
       }
       wz.vals.when = { date: d.date, time: d.time, text: t };
     }catch(e){ wState(e.message, 'err'); wz.busy = false; return; }
@@ -377,21 +395,34 @@ function finish(){
   $('cHint').style.display = 'none';
   open('bgConfirm');
 }
-function openWiz(voice){
-  stopRec(); wz = { i:0, vals:{}, voice, tok:wz.tok + 1, busy:false, t0:0, err:'' };
-  open('bgWiz'); showStep();
-  if (voice) listen(); else $('wInput').focus();
+function openWiz(){
+  stopRec(); wz = { i:0, vals:{}, voice:true, tok:wz.tok + 1, busy:false, t0:0, err:'', seg:0, n:0, res:null, timer:null, skipT:null };
+  open('bgWiz'); showStep(); listen();
 }
-$('btnAdd').onclick = () => openWiz(true);
-$('btnType').onclick = () => openWiz(false);
-$('wMic').onclick = () => { if (rec){ stopRec(); wState('หยุดแล้ว — กด ถัดไป/Enter หรือแตะ 🎤 อีกครั้ง'); } else { wz.voice = true; $('wInput').blur(); listen(); } };
-$('wNext').onclick = commit;
+$('btnAdd').onclick = openWiz;
+$('wMic').onclick = () => { if (rec){ stopRec(); wz.voice = false; wState('หยุดแล้ว — พิมพ์แล้วกด Enter หรือแตะ 🎤 อีกครั้ง'); } else { wz.voice = true; $('wInput').blur(); listen(); } };
+$('wNext').onclick = () => { if (rec){ stopRec(); wz.voice = false; } commit(); };
 $('wSkip').onclick = skip;
 $('wCancel').onclick = () => { stopRec(); close('bgWiz'); };
 $('wInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); wz.voice = false; commit(); }
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); if (rec){ stopRec(); wz.voice = false; } commit(); }
 });
-$('wInput').addEventListener('input', () => { if (!rec) return; });
+
+/* ---------- พิมพ์เอง: ฟอร์มเดียว (วันที่/เวลา → เรื่อง → …) Enter = ช่องถัดไป ---------- */
+$('btnType').onclick = () => {
+  editId = ''; rawText = '';
+  $('cRaw').textContent = 'พิมพ์เอง';
+  $('cDate').value = todayISO(); $('cTime').value = '';
+  ['cTitle','cLoc','cChair','cDress','cDet'].forEach(i => $(i).value = '');
+  $('cHint').style.display = 'none';
+  open('bgConfirm');
+};
+const FORM_ORDER = ['cTitle','cLoc','cChair','cDress','cDet'];
+FORM_ORDER.forEach((id, i) => $(id).addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+  e.preventDefault();
+  if (FORM_ORDER[i + 1]) $(FORM_ORDER[i + 1]).focus(); else $(id).blur();
+}));
 
 $('btnRef').onclick = () => { toast('กำลังรีเฟรช…', 1200); refresh(); };
 
