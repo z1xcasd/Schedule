@@ -72,6 +72,7 @@ textarea{min-height:92px;resize:vertical}
 .typehelp{color:var(--muted);font-size:14px;margin-bottom:8px}
 .tprev{margin-top:8px;font-size:14px;line-height:1.7}
 .tprev span{display:inline-block;margin:0 6px 4px 0;padding:2px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--line)}
+.tprev span.skipped{color:var(--muted);border-style:dashed}
 .tprev span.bad{border-color:var(--warn);color:var(--warn)}
 </style>
 </head>
@@ -254,12 +255,24 @@ $('aDel').onclick = async () => {
 
 /* ---------- พิมพ์: กล่องเดียว เว้น 2 วรรค = เปลี่ยนหัวข้อ ---------- */
 const TFIELDS = ['วันที่เวลา', 'เรื่อง', 'สถานที่', 'ประธาน', 'การแต่งกาย'];
-const splitTyped = t => t.split(/\s{2,}|\n+/).map(x => x.trim()).filter(Boolean);
+/* ทุก 2 วรรค (หรือขึ้นบรรทัดใหม่) = เปลี่ยนหัวข้อ; 4 วรรค = ข้าม 1 หัวข้อ, 6 วรรค = ข้าม 2 หัวข้อ */
+function splitTyped(t){
+  t = t.replace(/\r/g, '').trim();
+  if (!t) return [];
+  const parts = t.split(/(\s{2,}|\n+)/), out = [parts[0].trim()];
+  for (let i = 1; i < parts.length; i += 2){
+    const sep = parts[i], k = Math.max(1, /\n/.test(sep) ? 1 : Math.floor(sep.length / 2));
+    for (let j = 1; j < k; j++) out.push('');
+    out.push((parts[i + 1] || '').trim());
+  }
+  while (out.length && !out[out.length - 1]) out.pop();      // ช่องว่างท้ายสุดไม่ต้องนับ
+  return out;
+}
 function spellT(t){ return t.replace(/\([^)]*\)|（[^）]*）/g, ' ').replace(/บอ[\s-]*กอ/g, 'บก.').replace(/\s+/g, ' ').trim(); }
 $('btnAdd').onclick = () => { open('bgType'); setTimeout(() => $('typed').focus(), 150); };
 $('typed').addEventListener('input', () => {
   const p = splitTyped($('typed').value);
-  $('tPrev').innerHTML = p.map((x, i) => `<span>${esc(TFIELDS[i] || 'รายละเอียด')}: ${esc(x)}</span>`).join('');
+  $('tPrev').innerHTML = p.map((x, i) => `<span${x ? '' : ' class="skipped"'}>${esc(TFIELDS[i] || 'รายละเอียด')}: ${esc(x || '— ข้าม')}</span>`).join('');
 });
 $('typed').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); $('tGo').click(); }
@@ -284,8 +297,8 @@ $('tGo').onclick = async () => {
   close('bgType');
   if (p.length < 2){ handleText(text); return; }       // ไม่มีวรรคคู่ → ให้ AI แยกทั้งประโยค
   rawText = text; editId = '';
-  let d = parseWhen(p[0]);
-  if (!d || !d.time){                                    // อ่านเองไม่ได้ → ให้เซิร์ฟเวอร์ช่วย (แปลงเดือนย่อเป็นแบบมีจุดก่อน)
+  let d = parseWhen(p[0]) || { date: '', time: '' };
+  if (p[0] && (!d || !d.time)){                                    // อ่านเองไม่ได้ → ให้เซิร์ฟเวอร์ช่วย (แปลงเดือนย่อเป็นแบบมีจุดก่อน)
     toast('กำลังอ่านวันที่/เวลา…', 8000);
     try{
       const t0 = p[0].replace(MON_RE, (all, dd, mo, yy) => dd + ' ' + MON_DOT[mo] + (yy ? ' ' + yy : ''));
@@ -294,11 +307,11 @@ $('tGo').onclick = async () => {
     }catch(e){ toast(e.message, 4000); d = d || { date: '', time: '' }; }
     $('toast').classList.remove('show');
   }
-  $('cRaw').textContent = '“' + p.join('  ') + '”';
+  $('cRaw').textContent = '“' + text + '”';
   $('cDate').value = d.date || ''; $('cTime').value = d.time || '';
   $('cTitle').value = spellT(p[1] || ''); $('cLoc').value = spellT(p[2] || '');
   $('cChair').value = spellT(p[3] || ''); $('cDress').value = spellT(p[4] || '');
-  $('cDet').value = p.slice(5).join(' ');
+  $('cDet').value = p.slice(5).filter(Boolean).join(' ');
   const need = [];
   if (!d.date) need.push('วันที่'); if (!d.time) need.push('เวลา');
   const hint = $('cHint');
