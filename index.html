@@ -32,6 +32,7 @@ main{padding:12px 16px 140px;max-width:640px;margin:0 auto}
 .day .today{background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:1px 10px;font-size:13px}
 .item{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:8px;display:flex;gap:12px}
 .item .t{font-weight:700;min-width:52px;color:var(--accent)}
+.item .t small{display:block;font-weight:500;font-size:13px;color:var(--muted)}
 .item .b{flex:1;min-width:0}
 .item .title{font-weight:500}
 .item .sub{color:var(--muted);font-size:15px;margin-top:2px;word-break:break-word}
@@ -132,6 +133,7 @@ textarea{min-height:92px;resize:vertical}
     <div><label>วันที่</label><input id="cDate" type="date"></div>
     <div><label>เวลา</label><input id="cTime" type="time"></div>
   </div>
+  <div class="row"><div><label>เวลาสิ้นสุด (ถ้ามี)</label><input id="cEnd" type="time"></div><div></div></div>
   <label>เรื่อง</label><input id="cTitle" enterkeyhint="next">
   <label>สถานที่</label><input id="cLoc" enterkeyhint="next">
   <label>ผู้เกี่ยวข้อง</label><input id="cChair" enterkeyhint="next" placeholder="เช่น รอง ผบ.ศสร. 1">
@@ -209,7 +211,7 @@ function render(){
     }
     const subs = [it.location, it.chair && 'ผู้เกี่ยวข้อง : ' + it.chair, it.dress && 'การแต่งกาย : ' + it.dress, it.owner && 'ผู้รับผิดชอบ : ' + it.owner, it.details]
       .filter(Boolean).map(x => `<div class="sub">${esc(x)}</div>`).join('');
-    html += `<div class="item" data-id="${esc(it.id)}"><div class="t">${esc(it.time)}</div><div class="b"><div class="title">${esc(it.title)}</div>${subs}</div></div>`;
+    html += `<div class="item" data-id="${esc(it.id)}"><div class="t">${esc(it.time)}${(it.endMs - it.startMs) !== 3600000 && it.endTime ? '<small>–' + esc(it.endTime) + '</small>' : ''}</div><div class="b"><div class="title">${esc(it.title)}</div>${subs}</div></div>`;
   }
   el.innerHTML = html;
   el.querySelectorAll('.item').forEach(bindPress);
@@ -264,6 +266,7 @@ $('aEdit').onclick = () => {
   close('bgAct'); editId = cur.id;
   $('cRaw').textContent = 'แก้ไขนัด';
   $('cTitle').value = cur.title; $('cDate').value = cur.date; $('cTime').value = cur.time;
+  $('cEnd').value = (cur.endMs - cur.startMs) !== 3600000 ? (cur.endTime || '') : '';
   $('cLoc').value = cur.location; $('cChair').value = cur.chair || ''; $('cDress').value = cur.dress || ''; $('cOwner').value = cur.owner || ''; $('cDet').value = cur.details;
   $('cHint').style.display = 'none';
   open('bgConfirm');
@@ -307,8 +310,13 @@ function parseWhen(t){
   let date = y + '-' + ('0' + MON[m[2]]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
   if (!m[3] && date < today) date = (y + 1) + date.slice(4);
   const rest = t.replace(m[0], ' ');
+  const rg = rest.match(/(?:^|\D)([01]?\d|2[0-3])[:.]?([0-5]\d)\s*(?:-|–|—|ถึง)+\s*([01]?\d|2[0-3])[:.]?([0-5]\d)(?!\d)/);
+  if (rg){
+    const t1 = ('0' + rg[1]).slice(-2) + ':' + rg[2], t2 = ('0' + rg[3]).slice(-2) + ':' + rg[4];
+    return { date, time: t1, end: t2 > t1 ? t2 : '' };
+  }
   const tm = rest.match(/(?:^|\D)([01]?\d|2[0-3])[:.]?([0-5]\d)(?!\d)/);
-  return { date, time: tm ? ('0' + tm[1]).slice(-2) + ':' + tm[2] : '' };
+  return { date, time: tm ? ('0' + tm[1]).slice(-2) + ':' + tm[2] : '', end: '' };
 }
 $('tGo').onclick = async () => {
   const text = $('typed').value.trim(); if (!text) return;
@@ -322,12 +330,12 @@ $('tGo').onclick = async () => {
     try{
       const t0 = p[0].replace(MON_RE, (all, dd, mo, yy) => dd + ' ' + MON_DOT[mo] + (yy ? ' ' + yy : ''));
       const sv = await api('parse', { text: t0 });
-      d = { date: (d && d.date) || sv.date || '', time: (d && d.time) || sv.time || '' };
+      d = { date: (d && d.date) || sv.date || '', time: (d && d.time) || sv.time || '', end: (d && d.end) || '' };
     }catch(e){ toast(e.message, 4000); d = d || { date: '', time: '' }; }
     $('toast').classList.remove('show');
   }
   $('cRaw').textContent = '“' + text + '”';
-  $('cDate').value = d.date || ''; $('cTime').value = d.time || '';
+  $('cDate').value = d.date || ''; $('cTime').value = d.time || ''; $('cEnd').value = d.end || '';
   $('cTitle').value = spellT(p[1] || ''); $('cLoc').value = spellT(p[2] || '');
   $('cChair').value = spellT(p[3] || ''); $('cDress').value = spellT(p[4] || ''); $('cOwner').value = '';
   $('cDet').value = p.slice(5).filter(Boolean).join(' ');
@@ -362,10 +370,10 @@ function imgToB64(file){
   return new Promise((ok, no) => {
     const url = URL.createObjectURL(file), im = new Image();
     im.onload = () => {
-      const k = Math.min(1, 2200 / Math.max(im.width, im.height));
+      const k = Math.min(1, 2600 / Math.max(im.width, im.height));
       const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
       c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.88).split(',')[1]);
+      URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.9).split(',')[1]);
     };
     im.onerror = () => { URL.revokeObjectURL(url); no(new Error('เปิดรูปไม่ได้')); };
     im.src = url;
@@ -406,7 +414,7 @@ function showImp(){
     const sub = [r.location, r.chair && 'ผู้เกี่ยวข้อง : ' + r.chair, r.dress && 'การแต่งกาย : ' + r.dress, r.owner && 'ผู้รับผิดชอบ : ' + r.owner]
       .filter(Boolean).map(x => `<div class="ss">${esc(x)}</div>`).join('');
     h += `<label class="irow${r.dup ? ' dup' : ''}"><input type="checkbox" data-i="${i}" ${ok && !r.dup ? 'checked' : ''} ${ok ? '' : 'disabled'}>
-      <div><div class="tt">${esc(r.date ? new Date(r.date + 'T00:00:00+07:00').toLocaleDateString('th-TH', { weekday:'short', day:'numeric', month:'short', timeZone:'Asia/Bangkok' }) : '(ไม่มีวันที่)')} · ${esc(r.time || '--:--')}
+      <div><div class="tt">${esc(r.date ? new Date(r.date + 'T00:00:00+07:00').toLocaleDateString('th-TH', { weekday:'short', day:'numeric', month:'short', timeZone:'Asia/Bangkok' }) : '(ไม่มีวันที่)')} · ${esc(r.time || '--:--')}${r.endTime ? '–' + esc(r.endTime) : ''}
       ${r.dup ? '<span class="tag">มีในปฏิทินแล้ว</span>' : ''}${ok ? '' : '<span class="tag">ข้อมูลไม่ครบ</span>'}</div>
       <div>${esc(r.title || '(ไม่มีเรื่อง)')}</div>${sub}</div></label>`;
   });
@@ -440,7 +448,7 @@ async function handleText(text){
     $('toast').classList.remove('show');
     $('cRaw').textContent = '“' + text + '”';
     $('cTitle').value = d.title || ''; $('cDate').value = d.date || '';
-    $('cTime').value = d.time || ''; $('cLoc').value = d.location || '';
+    $('cTime').value = d.time || ''; $('cEnd').value = ''; $('cLoc').value = d.location || '';
     $('cChair').value = d.chair || ''; $('cDress').value = d.dress || ''; $('cOwner').value = ''; $('cDet').value = d.details || '';
     const need = [];
     if (!d.date) need.push('วันที่'); if (!d.time) need.push('เวลา'); if (!d.title) need.push('เรื่อง');
@@ -454,7 +462,7 @@ async function handleText(text){
 }
 
 $('cSave').onclick = async () => {
-  const d = { title: $('cTitle').value.trim(), date: $('cDate').value, time: $('cTime').value,
+  const d = { title: $('cTitle').value.trim(), date: $('cDate').value, time: $('cTime').value, endTime: $('cEnd').value,
               location: $('cLoc').value.trim(), chair: $('cChair').value.trim(), dress: $('cDress').value.trim(), owner: $('cOwner').value.trim(),
               details: $('cDet').value.trim(), raw: rawText, id: editId };
   ['cTitle','cDate','cTime'].forEach(i => $(i).classList.remove('need'));
