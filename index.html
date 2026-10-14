@@ -69,6 +69,8 @@ textarea{min-height:92px;resize:vertical}
 .act-title{font-weight:700;font-size:19px}
 .act-sub{color:var(--muted);font-size:15px;margin:2px 0 8px}
 .act{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;padding:15px 4px}
+.item a.tel{color:var(--accent);text-decoration:underline;-webkit-touch-callout:none}
+.act.tel-act{color:var(--accent);text-decoration:none;font-weight:600}
 .act.danger{color:var(--danger)}
 .typehelp{color:var(--muted);font-size:14px;margin-bottom:8px}
 .tprev{margin-top:8px;font-size:14px;line-height:1.7}
@@ -160,6 +162,7 @@ textarea{min-height:92px;resize:vertical}
 <div class="sheet-bg" id="bgAct"><div class="sheet">
   <div class="act-title" id="aTitle"></div>
   <div class="act-sub" id="aSub"></div>
+  <div id="aTel"></div>
   <button class="act" id="aHour">⏩ เลื่อน +1 ชั่วโมง</button>
   <button class="act" id="aTomorrow">⏩ เลื่อนไปพรุ่งนี้ (เวลาเดิม)</button>
   <button class="act" id="aEdit">✎ แก้ไข / เลือกวัน-เวลาใหม่</button>
@@ -198,6 +201,9 @@ function fmtDay(d){
   return new Date(d + 'T00:00:00+07:00').toLocaleDateString('th-TH',
     { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'Asia/Bangkok' });
 }
+const TEL_RE = /(?<!\d)0\d{1,2}[-\s]?\d{3}[-\s]?\d{3,4}(?!\d)/g;
+const telLink = t => esc(t).replace(TEL_RE, m => `<a class="tel" href="tel:${m.replace(/\D/g, '')}">${m}</a>`);
+const phonesOf = it => [...new Set([it.owner, it.details, it.chair, it.location].filter(Boolean).join(' ').match(TEL_RE) || [])];
 function render(){
   const el = $('list');
   const now = Date.now();
@@ -210,7 +216,7 @@ function render(){
       html += `<div class="day">${esc(fmtDay(it.date))}${it.date===t?'<span class="today">วันนี้</span>':''}</div>`;
     }
     const subs = [it.location, it.chair && 'ผู้เกี่ยวข้อง : ' + it.chair, it.dress && 'การแต่งกาย : ' + it.dress, it.owner && 'ผู้รับผิดชอบ : ' + it.owner, it.details]
-      .filter(Boolean).map(x => `<div class="sub">${esc(x)}</div>`).join('');
+      .filter(Boolean).map(x => `<div class="sub">${telLink(x)}</div>`).join('');
     html += `<div class="item" data-id="${esc(it.id)}"><div class="t">${esc(it.time)}${(it.endMs - it.startMs) !== 3600000 && it.endTime ? '<small>–' + esc(it.endTime) + '</small>' : ''}</div><div class="b"><div class="title">${esc(it.title)}</div>${subs}</div></div>`;
   }
   el.innerHTML = html;
@@ -232,17 +238,20 @@ function bindPress(el){
   const cancel = () => { clearTimeout(timer); timer = null; el.classList.remove('press'); };
   el.addEventListener('touchstart', () => {
     el.classList.add('press');
-    timer = setTimeout(() => { cancel(); if (navigator.vibrate) navigator.vibrate(20); openAct(el.dataset.id); }, 500);
+    el._lp = false;
+    timer = setTimeout(() => { cancel(); el._lp = true; if (navigator.vibrate) navigator.vibrate(20); openAct(el.dataset.id); }, 500);
   }, { passive: true });
   el.addEventListener('touchmove', cancel, { passive: true });
   el.addEventListener('touchend', cancel);
   el.addEventListener('touchcancel', cancel);
   el.addEventListener('contextmenu', e => { e.preventDefault(); cancel(); openAct(el.dataset.id); });
+  el.addEventListener('click', e => { if (el._lp && e.target.closest('a')){ e.preventDefault(); } el._lp = false; });
 }
 function openAct(id){
   cur = items.find(i => i.id === id); if (!cur) return;
   $('aTitle').textContent = cur.title;
   $('aSub').textContent = fmtDay(cur.date) + ' · ' + cur.time;
+  $('aTel').innerHTML = phonesOf(cur).map(m => `<a class="act tel-act" href="tel:${m.replace(/\D/g, '')}">โทร ${esc(m)}</a>`).join('');
   open('bgAct');
 }
 function shift(it, addMs){
