@@ -108,8 +108,8 @@ textarea{min-height:92px;resize:vertical}
   <h2>นำเข้าทั้งตาราง</h2>
   <div id="impIn">
     <div class="typehelp">เลือกรูปหรือแคปหน้าจอตารางงานประจำสัปดาห์ ให้ Gemini อ่านทุกแถว แล้วตรวจก่อนบันทึก</div>
-    <label class="filebtn" for="impFile">📷 เลือกรูปตาราง</label>
-    <input type="file" id="impFile" accept="image/*" hidden>
+    <label class="filebtn" for="impFile">📷 เลือกรูปตาราง (เลือกได้หลายรูป)</label>
+    <input type="file" id="impFile" accept="image/*" multiple hidden>
     <div class="typehelp" id="impName" style="margin-top:6px"></div>
     <label>หรือวางข้อความที่คัดลอกจากตาราง (Excel / Sheets / Word)</label>
     <textarea id="impText" spellcheck="false" placeholder="วางข้อความตารางที่นี่"></textarea>
@@ -353,7 +353,11 @@ $('tImport').onclick = () => {
   $('impRead').style.display = ''; $('impSave').style.display = 'none';
   open('bgImp');
 };
-$('impFile').onchange = () => { const f = $('impFile').files[0]; $('impName').textContent = f ? '✓ ' + f.name : ''; };
+$('impFile').onchange = () => {
+  const fs = [...$('impFile').files];
+  if (fs.length > 6){ toast('เลือกได้ไม่เกิน 6 รูป'); $('impFile').value = ''; $('impName').textContent = ''; return; }
+  $('impName').textContent = fs.length ? '✓ เลือก ' + fs.length + ' รูป' : '';
+};
 function imgToB64(file){
   return new Promise((ok, no) => {
     const url = URL.createObjectURL(file), im = new Image();
@@ -368,18 +372,30 @@ function imgToB64(file){
   });
 }
 $('impRead').onclick = async () => {
-  const f = $('impFile').files[0], text = $('impText').value.trim();
-  if (!f && !text){ toast('เลือกรูป หรือวางข้อความก่อน'); return; }
+  const files = [...$('impFile').files], text = $('impText').value.trim();
+  if (!files.length && !text){ toast('เลือกรูป หรือวางข้อความก่อน'); return; }
   const btn = $('impRead'); btn.disabled = true; btn.textContent = 'กำลังอ่าน…';
-  toast('กำลังอ่านตาราง อาจใช้เวลาสักครู่…', 60000);
-  try{
-    const payload = f ? { image: await imgToB64(f), mime: 'image/jpeg' } : { text };
-    if (f && text) payload.text = text;
-    impRows = await api('importParse', payload);
-    $('toast').classList.remove('show');
-    showImp();
-  }catch(e){ toast(e.message, 5000); }
+  const jobs = files.length ? files.map(f => ({ f })) : [{ text }];
+  const all = [], bad = [];
+  for (let i = 0; i < jobs.length; i++){
+    toast('กำลังอ่านรูปที่ ' + (i + 1) + '/' + jobs.length + '…', 90000);
+    try{
+      const payload = jobs[i].f ? { image: await imgToB64(jobs[i].f), mime: 'image/jpeg' } : { text };
+      if (jobs[i].f && text) payload.text = text;
+      all.push(...await api('importParse', payload));
+    }catch(e){ bad.push('รูปที่ ' + (i + 1) + ': ' + e.message); }
+  }
   btn.disabled = false; btn.textContent = 'อ่านตาราง';
+  if (!all.length){ toast(bad.length ? bad[0] : 'ไม่พบรายการในตาราง', 6000); return; }
+  const seen = new Set();
+  impRows = all.filter(r => {
+    const k = [r.date, r.time, r.title].join('|');
+    if (r.date && r.time && r.title){ if (seen.has(k)) return false; seen.add(k); }
+    return true;
+  }).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  $('toast').classList.remove('show');
+  showImp();
+  if (bad.length) toast('อ่านไม่สำเร็จ ' + bad.length + ' รูป — ' + bad[0], 7000);
 };
 function showImp(){
   $('impIn').style.display = 'none'; $('impOut').style.display = '';
