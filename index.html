@@ -74,6 +74,11 @@ textarea{min-height:92px;resize:vertical}
 .tprev span{display:inline-block;margin:0 6px 4px 0;padding:2px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--line)}
 .tprev span.skipped{color:var(--muted);border-style:dashed}
 .tprev span.bad{border-color:var(--warn);color:var(--warn)}
+.filebtn{display:block;text-align:center;border:1px dashed var(--accent);color:var(--accent);border-radius:14px;padding:13px;font-weight:700;cursor:pointer}
+.irow{display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid var(--line)}
+.irow input{width:auto;margin-top:4px;flex:none;transform:scale(1.3)}
+.irow .tt{font-weight:600}.irow .ss{color:var(--muted);font-size:14px;word-break:break-word}
+.irow.dup{opacity:.6}.irow .tag{display:inline-block;font-size:12px;border:1px solid var(--warn);color:var(--warn);border-radius:99px;padding:0 8px;margin-left:6px}
 </style>
 </head>
 <body>
@@ -87,19 +92,39 @@ textarea{min-height:92px;resize:vertical}
   <button class="fab" id="btnAdd" aria-label="เพิ่มนัด"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
 
-<!-- พิมพ์ (กล่องเดียว เว้น 2 วรรค = เปลี่ยนหัวข้อ) -->
 <div class="sheet-bg" id="bgType"><div class="sheet">
   <h2>บันทึกตารางงาน</h2>
-  <div class="typehelp">หัวข้อตามลำดับ<br>วันที่เวลา · เรื่อง · สถานที่ · ประธาน · การแต่งกาย</div>
-  <textarea id="typed" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="วันที่เวลา · เรื่อง · สถานที่ · ประธาน · การแต่งกาย"></textarea>
+  <div class="typehelp">หัวข้อตามลำดับ<br>วันที่เวลา · เรื่อง · สถานที่ · ผู้เกี่ยวข้อง · การแต่งกาย</div>
+  <textarea id="typed" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="วันที่เวลา · เรื่อง · สถานที่ · ผู้เกี่ยวข้อง · การแต่งกาย"></textarea>
   <div class="tprev" id="tPrev"></div>
+  <button class="btn ghost" id="tImport" style="width:100%;margin-top:14px">📋 นำเข้าทั้งตาราง (รูป / วางข้อความ)</button>
   <div class="btns">
     <button class="btn ghost" data-close="bgType">ปิด</button>
     <button class="btn" id="tGo">ตรวจสอบ</button>
   </div>
 </div></div>
 
-<!-- ยืนยัน -->
+<div class="sheet-bg" id="bgImp"><div class="sheet">
+  <h2>นำเข้าทั้งตาราง</h2>
+  <div id="impIn">
+    <div class="typehelp">เลือกรูปหรือแคปหน้าจอตารางงานประจำสัปดาห์ ให้ Gemini อ่านทุกแถว แล้วตรวจก่อนบันทึก</div>
+    <label class="filebtn" for="impFile">📷 เลือกรูปตาราง</label>
+    <input type="file" id="impFile" accept="image/*" hidden>
+    <div class="typehelp" id="impName" style="margin-top:6px"></div>
+    <label>หรือวางข้อความที่คัดลอกจากตาราง (Excel / Sheets / Word)</label>
+    <textarea id="impText" spellcheck="false" placeholder="วางข้อความตารางที่นี่"></textarea>
+  </div>
+  <div id="impOut" style="display:none">
+    <div class="typehelp" id="impSum"></div>
+    <div id="impList"></div>
+  </div>
+  <div class="btns">
+    <button class="btn ghost" data-close="bgImp">ปิด</button>
+    <button class="btn" id="impRead">อ่านตาราง</button>
+    <button class="btn" id="impSave" style="display:none">บันทึกที่เลือก</button>
+  </div>
+</div></div>
+
 <div class="sheet-bg" id="bgConfirm"><div class="sheet">
   <h2>ตรวจสอบก่อนบันทึก</h2>
   <div class="raw" id="cRaw"></div>
@@ -109,8 +134,9 @@ textarea{min-height:92px;resize:vertical}
   </div>
   <label>เรื่อง</label><input id="cTitle" enterkeyhint="next">
   <label>สถานที่</label><input id="cLoc" enterkeyhint="next">
-  <label>ประธาน</label><input id="cChair" enterkeyhint="next" placeholder="เช่น รอง ผบ.ศสร. 1">
+  <label>ผู้เกี่ยวข้อง</label><input id="cChair" enterkeyhint="next" placeholder="เช่น รอง ผบ.ศสร. 1">
   <label>การแต่งกาย</label><input id="cDress" enterkeyhint="next" placeholder="เช่น ชุดสีกากี">
+  <label>หน่วยรับผิดชอบ/ผู้บันทึกข้อมูล</label><input id="cOwner" enterkeyhint="next" placeholder="ดูได้ในแอป ไม่ส่งเข้าไลน์">
   <label>รายละเอียดอื่นๆ</label><input id="cDet">
   <div class="hint" id="cHint" style="display:none"></div>
   <div class="btns">
@@ -119,7 +145,6 @@ textarea{min-height:92px;resize:vertical}
   </div>
 </div></div>
 
-<!-- ตั้งค่า -->
 <div class="sheet-bg" id="bgSet"><div class="sheet">
   <h2>ตั้งค่า</h2>
   <label>ลิงก์เว็บแอป (Apps Script /exec)</label><input id="sUrl" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec">
@@ -130,7 +155,6 @@ textarea{min-height:92px;resize:vertical}
   </div>
 </div></div>
 
-<!-- เมนูกดค้างที่งาน -->
 <div class="sheet-bg" id="bgAct"><div class="sheet">
   <div class="act-title" id="aTitle"></div>
   <div class="act-sub" id="aSub"></div>
@@ -168,7 +192,6 @@ async function api(action, payload = {}) {
   return j.data;
 }
 
-/* ---------- รายการนัด ---------- */
 function fmtDay(d){
   return new Date(d + 'T00:00:00+07:00').toLocaleDateString('th-TH',
     { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'Asia/Bangkok' });
@@ -176,7 +199,7 @@ function fmtDay(d){
 function render(){
   const el = $('list');
   const now = Date.now();
-  const list = items.filter(it => it.endMs > now);   // งานที่ผ่านไปแล้วหายจากหน้านี้ (ยังอยู่ในปฏิทิน)
+  const list = items.filter(it => it.endMs > now);
   if (!list.length){ el.innerHTML = '<div class="empty">ไม่มีนัดที่จะถึง<br>กด + แล้วพิมพ์ได้เลย</div>'; return; }
   const t = todayISO(); let html = '', last = '';
   for (const it of list){
@@ -184,7 +207,7 @@ function render(){
       last = it.date;
       html += `<div class="day">${esc(fmtDay(it.date))}${it.date===t?'<span class="today">วันนี้</span>':''}</div>`;
     }
-    const subs = [it.location, it.chair && 'ประธาน : ' + it.chair, it.dress && 'การแต่งกาย : ' + it.dress, it.details]
+    const subs = [it.location, it.chair && 'ผู้เกี่ยวข้อง : ' + it.chair, it.dress && 'การแต่งกาย : ' + it.dress, it.owner && 'ผู้รับผิดชอบ : ' + it.owner, it.details]
       .filter(Boolean).map(x => `<div class="sub">${esc(x)}</div>`).join('');
     html += `<div class="item" data-id="${esc(it.id)}"><div class="t">${esc(it.time)}</div><div class="b"><div class="title">${esc(it.title)}</div>${subs}</div></div>`;
   }
@@ -202,7 +225,6 @@ async function refresh(){
 }
 setInterval(render, 60000);
 
-/* ---------- กดค้างที่งาน ---------- */
 function bindPress(el){
   let timer = null;
   const cancel = () => { clearTimeout(timer); timer = null; el.classList.remove('press'); };
@@ -232,7 +254,7 @@ async function doMove(addMs){
   close('bgAct'); toast('กำลังเลื่อน…', 8000);
   const n = shift(cur, addMs);
   try{
-    await api('update', { id: cur.id, title: cur.title, date: n.date, time: n.time, location: cur.location, chair: cur.chair, dress: cur.dress, details: cur.details });
+    await api('update', { id: cur.id, title: cur.title, date: n.date, time: n.time, location: cur.location, chair: cur.chair, dress: cur.dress, owner: cur.owner, details: cur.details });
     toast('เลื่อนแล้ว ✓'); refresh();
   }catch(e){ toast(e.message, 4000); }
 }
@@ -242,7 +264,7 @@ $('aEdit').onclick = () => {
   close('bgAct'); editId = cur.id;
   $('cRaw').textContent = 'แก้ไขนัด';
   $('cTitle').value = cur.title; $('cDate').value = cur.date; $('cTime').value = cur.time;
-  $('cLoc').value = cur.location; $('cChair').value = cur.chair || ''; $('cDress').value = cur.dress || ''; $('cDet').value = cur.details;
+  $('cLoc').value = cur.location; $('cChair').value = cur.chair || ''; $('cDress').value = cur.dress || ''; $('cOwner').value = cur.owner || ''; $('cDet').value = cur.details;
   $('cHint').style.display = 'none';
   open('bgConfirm');
 };
@@ -253,9 +275,7 @@ $('aDel').onclick = async () => {
   catch(e){ toast(e.message, 4000); }
 };
 
-/* ---------- พิมพ์: กล่องเดียว เว้น 2 วรรค = เปลี่ยนหัวข้อ ---------- */
-const TFIELDS = ['วันที่เวลา', 'เรื่อง', 'สถานที่', 'ประธาน', 'การแต่งกาย'];
-/* ทุก 2 วรรค (หรือขึ้นบรรทัดใหม่) = เปลี่ยนหัวข้อ; 4 วรรค = ข้าม 1 หัวข้อ, 6 วรรค = ข้าม 2 หัวข้อ */
+const TFIELDS = ['วันที่เวลา', 'เรื่อง', 'สถานที่', 'ผู้เกี่ยวข้อง', 'การแต่งกาย'];
 function splitTyped(t){
   t = t.replace(/\r/g, '').trim();
   if (!t) return [];
@@ -265,7 +285,7 @@ function splitTyped(t){
     for (let j = 1; j < k; j++) out.push('');
     out.push((parts[i + 1] || '').trim());
   }
-  while (out.length && !out[out.length - 1]) out.pop();      // ช่องว่างท้ายสุดไม่ต้องนับ
+  while (out.length && !out[out.length - 1]) out.pop();
   return out;
 }
 function spellT(t){ return t.replace(/\([^)]*\)|（[^）]*）/g, ' ').replace(/บอ[\s-]*กอ/g, 'บก.').replace(/\s+/g, ' ').trim(); }
@@ -277,7 +297,6 @@ $('typed').addEventListener('input', () => {
 $('typed').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); $('tGo').click(); }
 });
-/* วันที่เวลา: เดือนย่อไม่มีจุด (มค กพ มีค เมย พค มิย กค สค กย ตค พย ธค) */
 const MON = { 'มค':1,'กพ':2,'มีค':3,'เมย':4,'พค':5,'มิย':6,'กค':7,'สค':8,'กย':9,'ตค':10,'พย':11,'ธค':12 };
 const MON_DOT = { 'มค':'ม.ค.','กพ':'ก.พ.','มีค':'มี.ค.','เมย':'เม.ย.','พค':'พ.ค.','มิย':'มิ.ย.','กค':'ก.ค.','สค':'ส.ค.','กย':'ก.ย.','ตค':'ต.ค.','พย':'พ.ย.','ธค':'ธ.ค.' };
 const MON_RE = new RegExp('(\\d{1,2})\\s*(' + Object.keys(MON).join('|') + ')(?![ก-๙])\\s*(25\\d{2}(?!\\d))?');
@@ -295,10 +314,10 @@ $('tGo').onclick = async () => {
   const text = $('typed').value.trim(); if (!text) return;
   const p = splitTyped(text);
   close('bgType');
-  if (p.length < 2){ handleText(text); return; }       // ไม่มีวรรคคู่ → ให้ AI แยกทั้งประโยค
+  if (p.length < 2){ handleText(text); return; }
   rawText = text; editId = '';
   let d = parseWhen(p[0]) || { date: '', time: '' };
-  if (p[0] && (!d || !d.time)){                                    // อ่านเองไม่ได้ → ให้เซิร์ฟเวอร์ช่วย (แปลงเดือนย่อเป็นแบบมีจุดก่อน)
+  if (p[0] && (!d || !d.time)){
     toast('กำลังอ่านวันที่/เวลา…', 8000);
     try{
       const t0 = p[0].replace(MON_RE, (all, dd, mo, yy) => dd + ' ' + MON_DOT[mo] + (yy ? ' ' + yy : ''));
@@ -310,7 +329,7 @@ $('tGo').onclick = async () => {
   $('cRaw').textContent = '“' + text + '”';
   $('cDate').value = d.date || ''; $('cTime').value = d.time || '';
   $('cTitle').value = spellT(p[1] || ''); $('cLoc').value = spellT(p[2] || '');
-  $('cChair').value = spellT(p[3] || ''); $('cDress').value = spellT(p[4] || '');
+  $('cChair').value = spellT(p[3] || ''); $('cDress').value = spellT(p[4] || ''); $('cOwner').value = '';
   $('cDet').value = p.slice(5).filter(Boolean).join(' ');
   const need = [];
   if (!d.date) need.push('วันที่'); if (!d.time) need.push('เวลา');
@@ -320,15 +339,84 @@ $('tGo').onclick = async () => {
   $('typed').value = ''; $('tPrev').innerHTML = '';
   open('bgConfirm');
 };
-const FORM_ORDER = ['cTitle','cLoc','cChair','cDress','cDet'];
+const FORM_ORDER = ['cTitle','cLoc','cChair','cDress','cOwner','cDet'];
 FORM_ORDER.forEach((id, i) => $(id).addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
   e.preventDefault();
   if (FORM_ORDER[i + 1]) $(FORM_ORDER[i + 1]).focus(); else $(id).blur();
 }));
+let impRows = [];
+$('tImport').onclick = () => {
+  close('bgType');
+  $('impFile').value = ''; $('impName').textContent = ''; $('impText').value = '';
+  $('impIn').style.display = ''; $('impOut').style.display = 'none';
+  $('impRead').style.display = ''; $('impSave').style.display = 'none';
+  open('bgImp');
+};
+$('impFile').onchange = () => { const f = $('impFile').files[0]; $('impName').textContent = f ? '✓ ' + f.name : ''; };
+function imgToB64(file){
+  return new Promise((ok, no) => {
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 2200 / Math.max(im.width, im.height));
+      const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.88).split(',')[1]);
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); no(new Error('เปิดรูปไม่ได้')); };
+    im.src = url;
+  });
+}
+$('impRead').onclick = async () => {
+  const f = $('impFile').files[0], text = $('impText').value.trim();
+  if (!f && !text){ toast('เลือกรูป หรือวางข้อความก่อน'); return; }
+  const btn = $('impRead'); btn.disabled = true; btn.textContent = 'กำลังอ่าน…';
+  toast('กำลังอ่านตาราง อาจใช้เวลาสักครู่…', 60000);
+  try{
+    const payload = f ? { image: await imgToB64(f), mime: 'image/jpeg' } : { text };
+    if (f && text) payload.text = text;
+    impRows = await api('importParse', payload);
+    $('toast').classList.remove('show');
+    showImp();
+  }catch(e){ toast(e.message, 5000); }
+  btn.disabled = false; btn.textContent = 'อ่านตาราง';
+};
+function showImp(){
+  $('impIn').style.display = 'none'; $('impOut').style.display = '';
+  $('impRead').style.display = 'none'; $('impSave').style.display = '';
+  let h = '';
+  impRows.forEach((r, i) => {
+    const ok = r.title && r.date && r.time;
+    const sub = [r.location, r.chair && 'ผู้เกี่ยวข้อง : ' + r.chair, r.dress && 'การแต่งกาย : ' + r.dress, r.owner && 'ผู้รับผิดชอบ : ' + r.owner]
+      .filter(Boolean).map(x => `<div class="ss">${esc(x)}</div>`).join('');
+    h += `<label class="irow${r.dup ? ' dup' : ''}"><input type="checkbox" data-i="${i}" ${ok && !r.dup ? 'checked' : ''} ${ok ? '' : 'disabled'}>
+      <div><div class="tt">${esc(r.date ? new Date(r.date + 'T00:00:00+07:00').toLocaleDateString('th-TH', { weekday:'short', day:'numeric', month:'short', timeZone:'Asia/Bangkok' }) : '(ไม่มีวันที่)')} · ${esc(r.time || '--:--')}
+      ${r.dup ? '<span class="tag">มีในปฏิทินแล้ว</span>' : ''}${ok ? '' : '<span class="tag">ข้อมูลไม่ครบ</span>'}</div>
+      <div>${esc(r.title || '(ไม่มีเรื่อง)')}</div>${sub}</div></label>`;
+  });
+  $('impList').innerHTML = h || '<div class="empty">ไม่พบรายการในตาราง</div>';
+  $('impList').querySelectorAll('input').forEach(c => c.onchange = updImpCount);
+  updImpCount();
+}
+function updImpCount(){
+  const n = $('impList').querySelectorAll('input:checked').length;
+  $('impSum').textContent = 'พบ ' + impRows.length + ' รายการ · ติ๊กไว้ ' + n + ' (รายการที่มีในปฏิทินแล้วไม่ติ๊กให้)';
+  $('impSave').textContent = 'บันทึกที่เลือก (' + n + ')'; $('impSave').disabled = !n;
+}
+$('impSave').onclick = async () => {
+  const rows = [...$('impList').querySelectorAll('input:checked')].map(c => impRows[+c.dataset.i]);
+  if (!rows.length) return;
+  const btn = $('impSave'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
+  toast('กำลังบันทึก ' + rows.length + ' รายการ…', 120000);
+  try{
+    const r = await api('addMany', { rows });
+    close('bgImp'); refresh();
+    toast('เพิ่ม ' + r.added + ' รายการ ✓' + (r.failed.length ? ' · ไม่สำเร็จ ' + r.failed.length : ''), 5000);
+  }catch(e){ toast(e.message, 5000); btn.disabled = false; updImpCount(); }
+};
+
 $('btnRef').onclick = () => { toast('กำลังรีเฟรช…', 1200); refresh(); };
 
-/* ---------- แยกข้อความ → ยืนยัน ---------- */
 async function handleText(text){
   rawText = text; editId = ''; toast('กำลังแยกข้อความ…', 8000);
   try{
@@ -337,7 +425,7 @@ async function handleText(text){
     $('cRaw').textContent = '“' + text + '”';
     $('cTitle').value = d.title || ''; $('cDate').value = d.date || '';
     $('cTime').value = d.time || ''; $('cLoc').value = d.location || '';
-    $('cChair').value = d.chair || ''; $('cDress').value = d.dress || ''; $('cDet').value = d.details || '';
+    $('cChair').value = d.chair || ''; $('cDress').value = d.dress || ''; $('cOwner').value = ''; $('cDet').value = d.details || '';
     const need = [];
     if (!d.date) need.push('วันที่'); if (!d.time) need.push('เวลา'); if (!d.title) need.push('เรื่อง');
     const hint = $('cHint');
@@ -351,7 +439,7 @@ async function handleText(text){
 
 $('cSave').onclick = async () => {
   const d = { title: $('cTitle').value.trim(), date: $('cDate').value, time: $('cTime').value,
-              location: $('cLoc').value.trim(), chair: $('cChair').value.trim(), dress: $('cDress').value.trim(),
+              location: $('cLoc').value.trim(), chair: $('cChair').value.trim(), dress: $('cDress').value.trim(), owner: $('cOwner').value.trim(),
               details: $('cDet').value.trim(), raw: rawText, id: editId };
   ['cTitle','cDate','cTime'].forEach(i => $(i).classList.remove('need'));
   const miss = [['title','cTitle'],['date','cDate'],['time','cTime']].filter(([k]) => !d[k]);
@@ -365,7 +453,6 @@ $('cSave').onclick = async () => {
   btn.disabled = false; btn.textContent = 'บันทึกลงปฏิทิน';
 };
 
-/* ---------- ตั้งค่า ---------- */
 $('sSave').onclick = async () => {
   cfg = { url: $('sUrl').value.trim(), token: $('sTok').value.trim() };
   store.set('url', cfg.url); store.set('token', cfg.token);
