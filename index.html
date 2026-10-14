@@ -26,7 +26,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Sarabun',s
 header{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;
   padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;background:var(--bg);border-bottom:1px solid var(--line)}
 header h1{margin:0;font-size:22px;font-weight:700}
-.icon-btn{border:0;background:transparent;color:var(--muted);font-size:22px;padding:6px 10px;border-radius:10px;font-family:inherit}
+.icon-btn{border:0;background:transparent;color:var(--ink);font-size:26px;padding:6px 10px;border-radius:10px;font-family:inherit}
 main{padding:12px 16px 140px;max-width:640px;margin:0 auto}
 .day{margin:18px 0 8px;font-weight:700;color:var(--muted);font-size:15px;display:flex;gap:8px;align-items:center}
 .day .today{background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:1px 10px;font-size:13px}
@@ -38,8 +38,8 @@ main{padding:12px 16px 140px;max-width:640px;margin:0 auto}
 .empty{text-align:center;color:var(--muted);margin-top:60px;line-height:1.7}
 .dock{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;gap:22px;
   padding:14px 16px calc(env(safe-area-inset-bottom) + 18px);background:linear-gradient(transparent,var(--bg) 40%)}
-.fab{width:76px;height:76px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);
-  font-size:42px;line-height:1;font-weight:400;box-shadow:0 8px 24px rgba(15,118,110,.35);font-family:inherit}
+.fab{width:76px;height:76px;border-radius:50%;border:0;padding:0;background:#0f766e;color:#fff;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px rgba(15,118,110,.4)}
 .fab:active{transform:scale(.95)}
 .side{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:20px;font-family:inherit}
 .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:20}
@@ -78,31 +78,19 @@ textarea{min-height:92px;resize:vertical}
 <body>
 <header>
   <h1>ตารางงาน</h1>
-  <button class="icon-btn" id="btnSet" aria-label="ตั้งค่า">⚙︎</button>
+  <button class="icon-btn" id="btnRef" aria-label="รีเฟรช">↻</button>
 </header>
 <main id="list"></main>
 
 <div class="dock">
-  <button class="side" id="btnType" aria-label="พิมพ์แทน">⌨︎</button>
-  <button class="fab" id="btnAdd" aria-label="พูดเพื่อเพิ่มนัด">+</button>
-  <button class="side" id="btnRef" aria-label="รีเฟรช">↻</button>
+  <button class="fab" id="btnAdd" aria-label="เพิ่มนัด"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
-
-<!-- กำลังฟัง -->
-<div class="sheet-bg" id="bgListen"><div class="sheet listen">
-  <div class="pulse"></div>
-  <div class="transcript" id="transcript">พูดได้เลย…</div>
-  <div class="btns">
-    <button class="btn ghost" id="lCancel">ยกเลิก</button>
-    <button class="btn" id="lStop">เสร็จแล้ว</button>
-  </div>
-</div></div>
 
 <!-- พิมพ์ (กล่องเดียว เว้น 2 วรรค = เปลี่ยนหัวข้อ) -->
 <div class="sheet-bg" id="bgType"><div class="sheet">
   <h2>พิมพ์นัดหมาย</h2>
-  <div class="typehelp">เว้น <b>2 วรรค</b> เพื่อเปลี่ยนหัวข้อ ตามลำดับ<br>วันที่เวลา · เรื่อง · สถานที่ · ประธาน · การแต่งกาย</div>
-  <textarea id="typed" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="14 ตุลา 0830  ประชุม MB  ห้องประชุม 1 บก.ศสร.  รอง ผบ.ศสร. 1  ชุดปฏิบัติงาน"></textarea>
+  <div class="typehelp">เว้น <b>2 วรรค</b> เพื่อเปลี่ยนหัวข้อ ตามลำดับ<br>วันที่เวลา · เรื่อง · สถานที่ · ประธาน · การแต่งกาย<br>เดือนพิมพ์ย่อไม่ใส่จุด: มค กพ มีค เมย พค มิย กค สค กย ตค พย ธค</div>
+  <textarea id="typed" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="14 ตค 0830  ประชุม MB  ห้องประชุม 1 บก.ศสร.  รอง ผบ.ศสร. 1  ชุดปฏิบัติงาน"></textarea>
   <div class="tprev" id="tPrev"></div>
   <div class="btns">
     <button class="btn ghost" data-close="bgType">ปิด</button>
@@ -188,7 +176,7 @@ function render(){
   const el = $('list');
   const now = Date.now();
   const list = items.filter(it => it.endMs > now);   // งานที่ผ่านไปแล้วหายจากหน้านี้ (ยังอยู่ในปฏิทิน)
-  if (!list.length){ el.innerHTML = '<div class="empty">ไม่มีนัดที่จะถึง<br>กด + แล้วพูดได้เลย</div>'; return; }
+  if (!list.length){ el.innerHTML = '<div class="empty">ไม่มีนัดที่จะถึง<br>กด + แล้วพิมพ์ได้เลย</div>'; return; }
   const t = todayISO(); let html = '', last = '';
   for (const it of list){
     if (it.date !== last){
@@ -204,7 +192,7 @@ function render(){
 }
 async function refresh(){
   const el = $('list');
-  if (!cfg.url || !cfg.token) { el.innerHTML = '<div class="empty">ยังไม่ได้ตั้งค่า<br>กด ⚙︎ ที่มุมขวาบน</div>'; return; }
+  if (!cfg.url || !cfg.token) { el.innerHTML = '<div class="empty">ยังไม่ได้ตั้งค่า<br>กรอกลิงก์และรหัสในหน้าต่างที่ขึ้นมา</div>'; return; }
   try{
     items = await api('list');
     items.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
@@ -264,35 +252,11 @@ $('aDel').onclick = async () => {
   catch(e){ toast(e.message, 4000); }
 };
 
-/* ---------- เสียง ---------- */
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, finalText = '', cancelled = false;
-
-function startVoice(){
-  if (!SR){ toast('เบราว์เซอร์นี้ไม่รองรับเสียง ใช้ปุ่มพิมพ์ ⌨︎ แทน'); return; }
-  finalText = ''; cancelled = false;
-  $('transcript').textContent = 'พูดได้เลย…';
-  rec = new SR(); rec.lang = 'th-TH'; rec.interimResults = true; rec.continuous = false;
-  rec.onresult = e => {
-    let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-    finalText = t; $('transcript').textContent = t;
-  };
-  rec.onerror = e => { if (e.error !== 'aborted' && e.error !== 'no-speech') toast('ไมค์ใช้ไม่ได้: ' + e.error); };
-  rec.onend = () => {
-    close('bgListen');
-    if (!cancelled && finalText.trim()) handleText(finalText.trim());
-  };
-  try { rec.start(); open('bgListen'); } catch(e){ toast('เริ่มฟังไม่ได้'); }
-}
-$('btnAdd').onclick = startVoice;
-$('lStop').onclick = () => rec && rec.stop();
-$('lCancel').onclick = () => { cancelled = true; if (rec) rec.abort(); close('bgListen'); };
-
 /* ---------- พิมพ์: กล่องเดียว เว้น 2 วรรค = เปลี่ยนหัวข้อ ---------- */
 const TFIELDS = ['วันที่เวลา', 'เรื่อง', 'สถานที่', 'ประธาน', 'การแต่งกาย'];
 const splitTyped = t => t.split(/\s{2,}|\n+/).map(x => x.trim()).filter(Boolean);
 function spellT(t){ return t.replace(/\([^)]*\)|（[^）]*）/g, ' ').replace(/บอ[\s-]*กอ/g, 'บก.').replace(/\s+/g, ' ').trim(); }
-$('btnType').onclick = () => { open('bgType'); setTimeout(() => $('typed').focus(), 150); };
+$('btnAdd').onclick = () => { open('bgType'); setTimeout(() => $('typed').focus(), 150); };
 $('typed').addEventListener('input', () => {
   const p = splitTyped($('typed').value);
   $('tPrev').innerHTML = p.map((x, i) => `<span>${esc(TFIELDS[i] || 'รายละเอียด')}: ${esc(x)}</span>`).join('');
@@ -300,28 +264,48 @@ $('typed').addEventListener('input', () => {
 $('typed').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); $('tGo').click(); }
 });
+/* วันที่เวลา: เดือนย่อไม่มีจุด (มค กพ มีค เมย พค มิย กค สค กย ตค พย ธค) */
+const MON = { 'มค':1,'กพ':2,'มีค':3,'เมย':4,'พค':5,'มิย':6,'กค':7,'สค':8,'กย':9,'ตค':10,'พย':11,'ธค':12 };
+const MON_DOT = { 'มค':'ม.ค.','กพ':'ก.พ.','มีค':'มี.ค.','เมย':'เม.ย.','พค':'พ.ค.','มิย':'มิ.ย.','กค':'ก.ค.','สค':'ส.ค.','กย':'ก.ย.','ตค':'ต.ค.','พย':'พ.ย.','ธค':'ธ.ค.' };
+const MON_RE = new RegExp('(\\d{1,2})\\s*(' + Object.keys(MON).join('|') + ')(?![ก-๙])\\s*(25\\d{2}(?!\\d))?');
+function parseWhen(t){
+  const m = t.match(MON_RE); if (!m) return null;
+  const today = todayISO(); let y = +today.slice(0, 4);
+  if (m[3]){ y = +m[3]; if (y > 2400) y -= 543; }
+  let date = y + '-' + ('0' + MON[m[2]]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  if (!m[3] && date < today) date = (y + 1) + date.slice(4);
+  const rest = t.replace(m[0], ' ');
+  const tm = rest.match(/(?:^|\D)([01]?\d|2[0-3])[:.]?([0-5]\d)(?!\d)/);
+  return { date, time: tm ? ('0' + tm[1]).slice(-2) + ':' + tm[2] : '' };
+}
 $('tGo').onclick = async () => {
   const text = $('typed').value.trim(); if (!text) return;
   const p = splitTyped(text);
   close('bgType');
   if (p.length < 2){ handleText(text); return; }       // ไม่มีวรรคคู่ → ให้ AI แยกทั้งประโยค
-  rawText = text; editId = ''; toast('กำลังอ่านวันที่/เวลา…', 8000);
-  try{
-    const d = await api('parse', { text: p[0] });
+  rawText = text; editId = '';
+  let d = parseWhen(p[0]);
+  if (!d || !d.time){                                    // อ่านเองไม่ได้ → ให้เซิร์ฟเวอร์ช่วย (แปลงเดือนย่อเป็นแบบมีจุดก่อน)
+    toast('กำลังอ่านวันที่/เวลา…', 8000);
+    try{
+      const t0 = p[0].replace(MON_RE, (all, dd, mo, yy) => dd + ' ' + MON_DOT[mo] + (yy ? ' ' + yy : ''));
+      const sv = await api('parse', { text: t0 });
+      d = { date: (d && d.date) || sv.date || '', time: (d && d.time) || sv.time || '' };
+    }catch(e){ toast(e.message, 4000); d = d || { date: '', time: '' }; }
     $('toast').classList.remove('show');
-    $('cRaw').textContent = '“' + p.join('  ') + '”';
-    $('cDate').value = d.date || ''; $('cTime').value = d.time || '';
-    $('cTitle').value = spellT(p[1] || ''); $('cLoc').value = spellT(p[2] || '');
-    $('cChair').value = spellT(p[3] || ''); $('cDress').value = spellT(p[4] || '');
-    $('cDet').value = p.slice(5).join(' ');
-    const need = [];
-    if (!d.date) need.push('วันที่'); if (!d.time) need.push('เวลา');
-    const hint = $('cHint');
-    hint.style.display = need.length ? 'block' : 'none';
-    hint.textContent = need.length ? 'อ่าน ' + need.join(', ') + ' ไม่ได้ กรอกเองก่อนบันทึก' : '';
-    $('typed').value = ''; $('tPrev').innerHTML = '';
-    open('bgConfirm');
-  }catch(e){ toast(e.message, 4000); }
+  }
+  $('cRaw').textContent = '“' + p.join('  ') + '”';
+  $('cDate').value = d.date || ''; $('cTime').value = d.time || '';
+  $('cTitle').value = spellT(p[1] || ''); $('cLoc').value = spellT(p[2] || '');
+  $('cChair').value = spellT(p[3] || ''); $('cDress').value = spellT(p[4] || '');
+  $('cDet').value = p.slice(5).join(' ');
+  const need = [];
+  if (!d.date) need.push('วันที่'); if (!d.time) need.push('เวลา');
+  const hint = $('cHint');
+  hint.style.display = need.length ? 'block' : 'none';
+  hint.textContent = need.length ? 'อ่าน ' + need.join(', ') + ' ไม่ได้ กรอกเองก่อนบันทึก' : '';
+  $('typed').value = ''; $('tPrev').innerHTML = '';
+  open('bgConfirm');
 };
 const FORM_ORDER = ['cTitle','cLoc','cChair','cDress','cDet'];
 FORM_ORDER.forEach((id, i) => $(id).addEventListener('keydown', e => {
@@ -369,7 +353,6 @@ $('cSave').onclick = async () => {
 };
 
 /* ---------- ตั้งค่า ---------- */
-$('btnSet').onclick = () => { $('sUrl').value = cfg.url; $('sTok').value = cfg.token; open('bgSet'); };
 $('sSave').onclick = async () => {
   cfg = { url: $('sUrl').value.trim(), token: $('sTok').value.trim() };
   store.set('url', cfg.url); store.set('token', cfg.token);
