@@ -114,8 +114,8 @@ textarea{min-height:92px;resize:vertical}
     <label class="filebtn" for="impFile">📷 เลือกรูปตาราง (เลือกได้หลายรูป)</label>
     <input type="file" id="impFile" accept="image/*" multiple hidden>
     <div class="typehelp" id="impName" style="margin-top:6px"></div>
-    <label>หรือวางข้อความที่คัดลอกจากตาราง (Excel / Sheets / Word)</label>
-    <textarea id="impText" spellcheck="false" placeholder="วางข้อความตารางที่นี่"></textarea>
+    <label>หรือวางข้อความ / รูปที่คัดลอกไว้ (กดค้างในช่องแล้วเลือก วาง)</label>
+    <textarea id="impText" spellcheck="false" placeholder="วางข้อความ หรือวางรูปที่คัดลอกไว้ที่นี่"></textarea>
   </div>
   <div id="impOut" style="display:none">
     <div class="typehelp" id="impSum"></div>
@@ -365,16 +365,32 @@ FORM_ORDER.forEach((id, i) => $(id).addEventListener('keydown', e => {
 let impRows = [];
 $('tImport').onclick = () => {
   close('bgType');
-  $('impFile').value = ''; $('impName').textContent = ''; $('impText').value = '';
+  $('impFile').value = ''; impPasted = []; impStatus(); $('impText').value = '';
   $('impIn').style.display = ''; $('impOut').style.display = 'none';
   $('impRead').style.display = ''; $('impSave').style.display = 'none';
   open('bgImp');
 };
+let impPasted = [];
+function impStatus(){
+  const nf = $('impFile').files.length, np = impPasted.length, parts = [];
+  if (nf) parts.push('เลือก ' + nf + ' รูป');
+  if (np) parts.push('วางรูป ' + np + ' รูป (แตะที่นี่เพื่อล้างรูปที่วาง)');
+  $('impName').textContent = parts.length ? '✓ ' + parts.join(' · ') : '';
+}
+$('impName').onclick = () => { if (impPasted.length){ impPasted = []; impStatus(); toast('ล้างรูปที่วางแล้ว'); } };
 $('impFile').onchange = () => {
-  const fs = [...$('impFile').files];
-  if (fs.length > 6){ toast('เลือกได้ไม่เกิน 6 รูป'); $('impFile').value = ''; $('impName').textContent = ''; return; }
-  $('impName').textContent = fs.length ? '✓ เลือก ' + fs.length + ' รูป' : '';
+  if ($('impFile').files.length + impPasted.length > 6){ toast('รวมได้ไม่เกิน 6 รูป'); $('impFile').value = ''; }
+  impStatus();
 };
+$('impText').addEventListener('paste', e => {
+  const cd = e.clipboardData; if (!cd) return;
+  const imgs = [...(cd.files || [])].filter(f => /^image\//.test(f.type));
+  if (!imgs.length) [...(cd.items || [])].forEach(it => { if (it.kind === 'file' && /^image\//.test(it.type)){ const f = it.getAsFile(); if (f) imgs.push(f); } });
+  if (!imgs.length) return;
+  e.preventDefault();
+  if ($('impFile').files.length + impPasted.length + imgs.length > 6){ toast('รวมได้ไม่เกิน 6 รูป'); return; }
+  impPasted.push(...imgs); impStatus(); toast('วางรูปแล้ว ✓', 1500);
+});
 function imgToB64(file){
   return new Promise((ok, no) => {
     const url = URL.createObjectURL(file), im = new Image();
@@ -389,7 +405,7 @@ function imgToB64(file){
   });
 }
 $('impRead').onclick = async () => {
-  const files = [...$('impFile').files], text = $('impText').value.trim();
+  const files = [...$('impFile').files, ...impPasted], text = $('impText').value.trim();
   if (!files.length && !text){ toast('เลือกรูป หรือวางข้อความก่อน'); return; }
   const btn = $('impRead'); btn.disabled = true; btn.textContent = 'กำลังอ่าน…';
   const jobs = files.length ? files.map(f => ({ f })) : [{ text }];
