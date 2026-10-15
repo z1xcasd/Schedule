@@ -98,9 +98,11 @@ textarea{min-height:92px;resize:vertical}
 <div class="sheet-bg" id="bgType"><div class="sheet">
   <h2>บันทึกตารางงาน</h2>
   <div class="typehelp">หัวข้อตามลำดับ<br>วันที่เวลา · เรื่อง · สถานที่ · ผู้เกี่ยวข้อง · การแต่งกาย</div>
-  <textarea id="typed" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="วันที่เวลา · เรื่อง · สถานที่ · ผู้เกี่ยวข้อง · การแต่งกาย"></textarea>
+  <textarea id="typed" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="พิมพ์ / วางข้อความ / วางรูป"></textarea>
   <div class="tprev" id="tPrev"></div>
-  <button class="btn ghost" id="tImport" style="width:100%;margin-top:14px">📋 นำเข้าทั้งตาราง (รูป / วางข้อความ)</button>
+  <div class="typehelp" id="impName" style="margin-top:6px"></div>
+  <label class="filebtn" for="impFile" style="margin-top:12px">📷 เลือกรูปจากอัลบั้ม</label>
+  <input type="file" id="impFile" accept="image/*" multiple hidden>
   <div class="btns">
     <button class="btn ghost" data-close="bgType">ปิด</button>
     <button class="btn" id="tGo">ตรวจสอบ</button>
@@ -108,23 +110,12 @@ textarea{min-height:92px;resize:vertical}
 </div></div>
 
 <div class="sheet-bg" id="bgImp"><div class="sheet">
-  <h2>นำเข้าทั้งตาราง</h2>
-  <div id="impIn">
-    <div class="typehelp">เลือกรูปหรือแคปหน้าจอตารางงานประจำสัปดาห์ ให้ Gemini อ่านทุกแถว แล้วตรวจก่อนบันทึก</div>
-    <label class="filebtn" for="impFile">📷 เลือกรูปตาราง (เลือกได้หลายรูป)</label>
-    <input type="file" id="impFile" accept="image/*" multiple hidden>
-    <div class="typehelp" id="impName" style="margin-top:6px"></div>
-    <label>หรือวางข้อความ / รูปที่คัดลอกไว้ (กดค้างในช่องแล้วเลือก วาง)</label>
-    <textarea id="impText" spellcheck="false" placeholder="วางข้อความ หรือวางรูปที่คัดลอกไว้ที่นี่"></textarea>
-  </div>
-  <div id="impOut" style="display:none">
-    <div class="typehelp" id="impSum"></div>
-    <div id="impList"></div>
-  </div>
+  <h2>ตรวจสอบรายการ</h2>
+  <div class="typehelp" id="impSum"></div>
+  <div id="impList"></div>
   <div class="btns">
     <button class="btn ghost" data-close="bgImp">ปิด</button>
-    <button class="btn" id="impRead">อ่านตาราง</button>
-    <button class="btn" id="impSave" style="display:none">บันทึกที่เลือก</button>
+    <button class="btn" id="impSave">บันทึกที่เลือก</button>
   </div>
 </div></div>
 
@@ -141,7 +132,7 @@ textarea{min-height:92px;resize:vertical}
   <label>ผู้เกี่ยวข้อง</label><input id="cChair" enterkeyhint="next" placeholder="เช่น รอง ผบ.ศสร. 1">
   <label>การแต่งกาย</label><input id="cDress" enterkeyhint="next" placeholder="เช่น ชุดสีกากี">
   <label>หน่วยรับผิดชอบ/ผู้บันทึกข้อมูล</label><input id="cOwner" enterkeyhint="next" placeholder="ดูได้ในแอป ไม่ส่งเข้าไลน์">
-  <label>รายละเอียดอื่นๆ</label><input id="cDet">
+  <label>รายละเอียดอื่นๆ</label><textarea id="cDet" style="min-height:64px"></textarea>
   <div class="hint" id="cHint" style="display:none"></div>
   <div class="btns">
     <button class="btn ghost" data-close="bgConfirm">ยกเลิก</button>
@@ -301,9 +292,18 @@ function splitTyped(t){
   return out;
 }
 function spellT(t){ return t.replace(/\([^)]*\)|（[^）]*）/g, ' ').replace(/บอ[\s-]*กอ/g, 'บก.').replace(/\s+/g, ' ').trim(); }
-$('btnAdd').onclick = () => { open('bgType'); setTimeout(() => $('typed').focus(), 150); };
+const TYPED_START = new RegExp('^\\d{1,2}\\s*(' + ['มีค','มค','กพ','เมย','พค','มิย','กค','สค','กย','ตค','พย','ธค'].join('|') + ')(?![ก-๙])');
+function isTypedFormat(text){
+  const p = splitTyped(text);
+  return p.length >= 2 && p[0].length <= 30 && TYPED_START.test(p[0]);
+}
+function resetType(){ $('typed').value = ''; $('tPrev').innerHTML = ''; $('impFile').value = ''; impPasted = []; impStatus(); }
+$('btnAdd').onclick = () => { resetType(); open('bgType'); setTimeout(() => $('typed').focus(), 150); };
 $('typed').addEventListener('input', () => {
-  const p = splitTyped($('typed').value);
+  const t = $('typed').value.trim();
+  if (!t){ $('tPrev').innerHTML = ''; return; }
+  if (!isTypedFormat(t)){ $('tPrev').innerHTML = '<span>ข้อความนี้จะให้ Gemini แยกให้</span>'; return; }
+  const p = splitTyped(t);
   $('tPrev').innerHTML = p.map((x, i) => `<span${x ? '' : ' class="skipped"'}>${esc(TFIELDS[i] || 'รายละเอียด')}: ${esc(x || '— ข้าม')}</span>`).join('');
 });
 $('typed').addEventListener('keydown', e => {
@@ -328,10 +328,11 @@ function parseWhen(t){
   return { date, time: tm ? ('0' + tm[1]).slice(-2) + ':' + tm[2] : '', end: '' };
 }
 $('tGo').onclick = async () => {
-  const text = $('typed').value.trim(); if (!text) return;
+  const text = $('typed').value.trim(), files = [...$('impFile').files, ...impPasted];
+  if (!text && !files.length){ toast('พิมพ์ วางข้อความ หรือวางรูปก่อน'); return; }
+  if (files.length || !isTypedFormat(text)){ aiImport(files, text); return; }
   const p = splitTyped(text);
   close('bgType');
-  if (p.length < 2){ handleText(text); return; }
   rawText = text; editId = '';
   let d = parseWhen(p[0]) || { date: '', time: '' };
   if (p[0] && (!d || !d.time)){
@@ -353,7 +354,7 @@ $('tGo').onclick = async () => {
   const hint = $('cHint');
   hint.style.display = need.length ? 'block' : 'none';
   hint.textContent = need.length ? 'อ่าน ' + need.join(', ') + ' ไม่ได้ กรอกเองก่อนบันทึก' : '';
-  $('typed').value = ''; $('tPrev').innerHTML = '';
+  resetType();
   open('bgConfirm');
 };
 const FORM_ORDER = ['cTitle','cLoc','cChair','cDress','cOwner','cDet'];
@@ -363,13 +364,6 @@ FORM_ORDER.forEach((id, i) => $(id).addEventListener('keydown', e => {
   if (FORM_ORDER[i + 1]) $(FORM_ORDER[i + 1]).focus(); else $(id).blur();
 }));
 let impRows = [];
-$('tImport').onclick = () => {
-  close('bgType');
-  $('impFile').value = ''; impPasted = []; impStatus(); $('impText').value = '';
-  $('impIn').style.display = ''; $('impOut').style.display = 'none';
-  $('impRead').style.display = ''; $('impSave').style.display = 'none';
-  open('bgImp');
-};
 let impPasted = [];
 function impStatus(){
   const nf = $('impFile').files.length, np = impPasted.length, parts = [];
@@ -382,7 +376,7 @@ $('impFile').onchange = () => {
   if ($('impFile').files.length + impPasted.length > 6){ toast('รวมได้ไม่เกิน 6 รูป'); $('impFile').value = ''; }
   impStatus();
 };
-$('impText').addEventListener('paste', e => {
+$('typed').addEventListener('paste', e => {
   const cd = e.clipboardData; if (!cd) return;
   const imgs = [...(cd.files || [])].filter(f => /^image\//.test(f.type));
   if (!imgs.length) [...(cd.items || [])].forEach(it => { if (it.kind === 'file' && /^image\//.test(it.type)){ const f = it.getAsFile(); if (f) imgs.push(f); } });
@@ -404,22 +398,20 @@ function imgToB64(file){
     im.src = url;
   });
 }
-$('impRead').onclick = async () => {
-  const files = [...$('impFile').files, ...impPasted], text = $('impText').value.trim();
-  if (!files.length && !text){ toast('เลือกรูป หรือวางข้อความก่อน'); return; }
-  const btn = $('impRead'); btn.disabled = true; btn.textContent = 'กำลังอ่าน…';
-  const jobs = files.length ? files.map(f => ({ f })) : [{ text }];
+async function aiImport(files, text){
+  const btn = $('tGo'); btn.disabled = true; btn.textContent = 'กำลังอ่าน…';
+  const jobs = files.map(f => ({ f }));
+  if (text) jobs.push({ text });
   const all = [], bad = [];
   for (let i = 0; i < jobs.length; i++){
-    toast('กำลังอ่านรูปที่ ' + (i + 1) + '/' + jobs.length + '…', 90000);
+    toast(jobs.length > 1 ? 'กำลังอ่าน ' + (i + 1) + '/' + jobs.length + '…' : 'กำลังให้ Gemini แยกข้อมูล…', 90000);
     try{
-      const payload = jobs[i].f ? { image: await imgToB64(jobs[i].f), mime: 'image/jpeg' } : { text };
-      if (jobs[i].f && text) payload.text = text;
+      const payload = jobs[i].f ? { image: await imgToB64(jobs[i].f), mime: 'image/jpeg' } : { text: jobs[i].text };
       all.push(...await api('importParse', payload));
-    }catch(e){ bad.push('รูปที่ ' + (i + 1) + ': ' + e.message); }
+    }catch(e){ bad.push((jobs[i].f ? 'รูปที่ ' + (i + 1) : 'ข้อความ') + ': ' + e.message); }
   }
-  btn.disabled = false; btn.textContent = 'อ่านตาราง';
-  if (!all.length){ toast(bad.length ? bad[0] : 'ไม่พบรายการในตาราง', 6000); return; }
+  btn.disabled = false; btn.textContent = 'ตรวจสอบ';
+  if (!all.length){ toast(bad.length ? bad[0] : 'ไม่พบรายการ', 6000); return; }
   const seen = new Set();
   impRows = all.filter(r => {
     const k = [r.date, r.time, r.title].join('|');
@@ -427,9 +419,23 @@ $('impRead').onclick = async () => {
     return true;
   }).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   $('toast').classList.remove('show');
-  showImp();
-  if (bad.length) toast('อ่านไม่สำเร็จ ' + bad.length + ' รูป — ' + bad[0], 7000);
-};
+  close('bgType');
+  if (impRows.length === 1 && !impRows[0].match && !bad.length){
+    const r = impRows[0];
+    rawText = text || 'จากรูป'; editId = '';
+    $('cRaw').textContent = text ? '“' + (text.length > 120 ? text.slice(0, 120) + '…' : text) + '”' : 'อ่านจากรูป';
+    $('cDate').value = r.date || ''; $('cTime').value = r.time || ''; $('cEnd').value = r.endTime || '';
+    $('cTitle').value = r.title || ''; $('cLoc').value = r.location || ''; $('cChair').value = r.chair || '';
+    $('cDress').value = r.dress || ''; $('cOwner').value = r.owner || ''; $('cDet').value = r.details || '';
+    const need = []; if (!r.date) need.push('วันที่'); if (!r.time) need.push('เวลา'); if (!r.title) need.push('เรื่อง');
+    $('cHint').style.display = need.length ? 'block' : 'none';
+    $('cHint').textContent = need.length ? 'อ่าน ' + need.join(', ') + ' ไม่ได้ กรอกเองก่อนบันทึก' : '';
+    resetType(); open('bgConfirm');
+  } else {
+    resetType(); showImp(); open('bgImp');
+  }
+  if (bad.length) toast('อ่านไม่สำเร็จ ' + bad.length + ' รายการ — ' + bad[0], 7000);
+}
 const IMP_F = [['time','เวลา'],['endTime','เวลาสิ้นสุด'],['location','สถานที่'],['chair','ผู้เกี่ยวข้อง'],['dress','การแต่งกาย'],['owner','ผู้รับผิดชอบ'],['details','รายละเอียด']];
 function impChanges(r){
   const m = r.match; if (!m) return [];
@@ -437,8 +443,6 @@ function impChanges(r){
   return IMP_F.filter(([k]) => r[k] && r[k] !== old[k]).map(([k, label]) => ({ label, from: old[k] || '—', to: r[k] }));
 }
 function showImp(){
-  $('impIn').style.display = 'none'; $('impOut').style.display = '';
-  $('impRead').style.display = 'none'; $('impSave').style.display = '';
   let h = '';
   impRows.forEach((r, i) => {
     const m = r.match, ch = impChanges(r);
