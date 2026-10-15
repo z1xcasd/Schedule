@@ -81,7 +81,7 @@ textarea{min-height:92px;resize:vertical}
 .irow{display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid var(--line)}
 .irow input{width:auto;margin-top:4px;flex:none;transform:scale(1.3)}
 .irow .tt{font-weight:600}.irow .ss{color:var(--muted);font-size:14px;word-break:break-word}
-.irow.dup{opacity:.6}.irow .tag{display:inline-block;font-size:12px;border:1px solid var(--warn);color:var(--warn);border-radius:99px;padding:0 8px;margin-left:6px}
+.irow.dup{opacity:.6}.irow .tag.upd{border-color:var(--accent);color:var(--accent)}.irow .tag{display:inline-block;font-size:12px;border:1px solid var(--warn);color:var(--warn);border-radius:99px;padding:0 8px;margin-left:6px}
 </style>
 </head>
 <body>
@@ -215,7 +215,7 @@ function render(){
       last = it.date;
       html += `<div class="day">${esc(fmtDay(it.date))}${it.date===t?'<span class="today">วันนี้</span>':''}</div>`;
     }
-    const subs = [it.location, it.chair && 'ผู้เกี่ยวข้อง : ' + it.chair, it.dress && 'การแต่งกาย : ' + it.dress, it.owner && 'ผู้รับผิดชอบ : ' + it.owner, it.details]
+    const subs = [it.location && 'สถานที่ : ' + it.location, it.chair && 'ผู้เกี่ยวข้อง : ' + it.chair, it.dress && 'การแต่งกาย : ' + it.dress, it.owner && 'ผู้รับผิดชอบ : ' + it.owner, it.details]
       .filter(Boolean).map(x => `<div class="sub">${telLink(x)}</div>`).join('');
     html += `<div class="item" data-id="${esc(it.id)}"><div class="t">${esc(it.time)}${(it.endMs - it.startMs) !== 3600000 && it.endTime ? '<small>–' + esc(it.endTime) + '</small>' : ''}</div><div class="b"><div class="title">${esc(it.title)}</div>${subs}</div></div>`;
   }
@@ -414,37 +414,54 @@ $('impRead').onclick = async () => {
   showImp();
   if (bad.length) toast('อ่านไม่สำเร็จ ' + bad.length + ' รูป — ' + bad[0], 7000);
 };
+const IMP_F = [['time','เวลา'],['endTime','เวลาสิ้นสุด'],['location','สถานที่'],['chair','ผู้เกี่ยวข้อง'],['dress','การแต่งกาย'],['owner','ผู้รับผิดชอบ'],['details','รายละเอียด']];
+function impChanges(r){
+  const m = r.match; if (!m) return [];
+  const old = Object.assign({}, m, { endTime: m.span !== 3600000 ? m.endTime : '' });
+  return IMP_F.filter(([k]) => r[k] && r[k] !== old[k]).map(([k, label]) => ({ label, from: old[k] || '—', to: r[k] }));
+}
 function showImp(){
   $('impIn').style.display = 'none'; $('impOut').style.display = '';
   $('impRead').style.display = 'none'; $('impSave').style.display = '';
   let h = '';
   impRows.forEach((r, i) => {
-    const ok = r.title && r.date && r.time;
-    const sub = [r.location, r.chair && 'ผู้เกี่ยวข้อง : ' + r.chair, r.dress && 'การแต่งกาย : ' + r.dress, r.owner && 'ผู้รับผิดชอบ : ' + r.owner]
-      .filter(Boolean).map(x => `<div class="ss">${esc(x)}</div>`).join('');
-    h += `<label class="irow${r.dup ? ' dup' : ''}"><input type="checkbox" data-i="${i}" ${ok && !r.dup ? 'checked' : ''} ${ok ? '' : 'disabled'}>
-      <div><div class="tt">${esc(r.date ? new Date(r.date + 'T00:00:00+07:00').toLocaleDateString('th-TH', { weekday:'short', day:'numeric', month:'short', timeZone:'Asia/Bangkok' }) : '(ไม่มีวันที่)')} · ${esc(r.time || '--:--')}${r.endTime ? '–' + esc(r.endTime) : ''}
-      ${r.dup ? '<span class="tag">มีในปฏิทินแล้ว</span>' : ''}${ok ? '' : '<span class="tag">ข้อมูลไม่ครบ</span>'}</div>
-      <div>${esc(r.title || '(ไม่มีเรื่อง)')}</div>${sub}</div></label>`;
+    const m = r.match, ch = impChanges(r);
+    const ok = !!(r.title && r.date && (r.time || m));
+    const on = ok && (!m || ch.length);
+    let tag = '', sub;
+    if (m){
+      tag = ch.length ? '<span class="tag upd">อัปเดตงานเดิม</span>' : '<span class="tag">ไม่มีการเปลี่ยนแปลง</span>';
+      sub = ch.map(c => `<div class="ss">${esc(c.label)} : ${esc(c.from)} → <b>${esc(c.to)}</b></div>`).join('');
+    } else {
+      sub = [r.location && 'สถานที่ : ' + r.location, r.chair && 'ผู้เกี่ยวข้อง : ' + r.chair, r.dress && 'การแต่งกาย : ' + r.dress, r.owner && 'ผู้รับผิดชอบ : ' + r.owner]
+        .filter(Boolean).map(x => `<div class="ss">${esc(x)}</div>`).join('');
+    }
+    if (!ok) tag += '<span class="tag">ข้อมูลไม่ครบ</span>';
+    const time = r.time || (m && m.time) || '--:--';
+    h += `<label class="irow${m && !ch.length ? ' dup' : ''}"><input type="checkbox" data-i="${i}" ${on ? 'checked' : ''} ${ok ? '' : 'disabled'}>
+      <div><div class="tt">${esc(r.date ? new Date(r.date + 'T00:00:00+07:00').toLocaleDateString('th-TH', { weekday:'short', day:'numeric', month:'short', timeZone:'Asia/Bangkok' }) : '(ไม่มีวันที่)')} · ${esc(time)}${r.endTime ? '–' + esc(r.endTime) : ''}
+      ${tag}</div>
+      <div>${esc((m ? m.title : r.title) || '(ไม่มีเรื่อง)')}</div>${sub}</div></label>`;
   });
   $('impList').innerHTML = h || '<div class="empty">ไม่พบรายการในตาราง</div>';
   $('impList').querySelectorAll('input').forEach(c => c.onchange = updImpCount);
   updImpCount();
 }
 function updImpCount(){
-  const n = $('impList').querySelectorAll('input:checked').length;
-  $('impSum').textContent = 'พบ ' + impRows.length + ' รายการ · ติ๊กไว้ ' + n + ' (รายการที่มีในปฏิทินแล้วไม่ติ๊กให้)';
-  $('impSave').textContent = 'บันทึกที่เลือก (' + n + ')'; $('impSave').disabled = !n;
+  const sel = [...$('impList').querySelectorAll('input:checked')].map(c => impRows[+c.dataset.i]);
+  const nu = sel.filter(r => r.match).length, na = sel.length - nu;
+  $('impSum').textContent = 'พบ ' + impRows.length + ' รายการ · เลือกเพิ่มใหม่ ' + na + ' · อัปเดตงานเดิม ' + nu;
+  $('impSave').textContent = 'บันทึกที่เลือก (' + sel.length + ')'; $('impSave').disabled = !sel.length;
 }
 $('impSave').onclick = async () => {
-  const rows = [...$('impList').querySelectorAll('input:checked')].map(c => impRows[+c.dataset.i]);
+  const rows = [...$('impList').querySelectorAll('input:checked')].map(c => { const r = impRows[+c.dataset.i]; return Object.assign({}, r, { match: undefined, matchId: r.match ? r.match.id : '' }); });
   if (!rows.length) return;
   const btn = $('impSave'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
   toast('กำลังบันทึก ' + rows.length + ' รายการ…', 120000);
   try{
     const r = await api('addMany', { rows });
     close('bgImp'); refresh();
-    toast('เพิ่ม ' + r.added + ' รายการ ✓' + (r.failed.length ? ' · ไม่สำเร็จ ' + r.failed.length : ''), 5000);
+    toast([r.added && 'เพิ่ม ' + r.added, r.updated && 'อัปเดต ' + r.updated].filter(Boolean).join(' · ') + ' ✓' + (r.failed.length ? ' · ไม่สำเร็จ ' + r.failed.length : ''), 5000);
   }catch(e){ toast(e.message, 5000); btn.disabled = false; updImpCount(); }
 };
 
