@@ -442,6 +442,7 @@ async function aiImport(files, text){
     resetType(); showImp(); open('bgImp');
   }
   if (bad.length) toast('อ่านไม่สำเร็จ ' + bad.length + ' รายการ — ' + bad[0], 7000);
+  else if (all.some(r => r.source === 'claude')) toast('Gemini ใช้ไม่ได้ — อ่านโดย Claude (ตัวสำรอง)', 4000);
 }
 const IMP_F = [['time','เวลา'],['endTime','เวลาสิ้นสุด'],['location','สถานที่'],['chair','ผู้เกี่ยวข้อง'],['dress','การแต่งกาย'],['owner','ผู้รับผิดชอบ'],['details','รายละเอียด']];
 function impChanges(r){
