@@ -84,6 +84,8 @@ textarea{min-height:92px;resize:vertical}
 .irow input{width:auto;margin-top:4px;flex:none;transform:scale(1.3)}
 .irow .tt{font-weight:600}.irow .ss{color:var(--muted);font-size:14px;word-break:break-word}
 .irow.dup{opacity:.6}.irow .tag.upd{border-color:var(--accent);color:var(--accent)}.irow .tag{display:inline-block;font-size:12px;border:1px solid var(--warn);color:var(--warn);border-radius:99px;padding:0 8px;margin-left:6px}
+#typed.drop{border:2px dashed var(--accent);background-image:none;outline:none}
+#typed.drop::placeholder{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -384,14 +386,36 @@ $('impFile').onchange = () => {
   if ($('impFile').files.length + impPasted.length > 6){ toast('รวมได้ไม่เกิน 6 รูป'); $('impFile').value = ''; }
   impStatus();
 };
+function addImgs(imgs){
+  if ($('impFile').files.length + impPasted.length + imgs.length > 6){ toast('รวมได้ไม่เกิน 6 รูป'); return false; }
+  impPasted.push(...imgs); impStatus(); toast('วางรูปแล้ว ✓', 1500); return true;
+}
+const TYPED_PH = 'พิมพ์ / วางข้อความ / วางรูป';
+function setDrop(on){ $('typed').classList.toggle('drop', on); $('typed').placeholder = on ? 'ปล่อยรูปที่นี่' : TYPED_PH; }
+['dragenter', 'dragover'].forEach(t => $('typed').addEventListener(t, e => {
+  if (![...(e.dataTransfer?.types || [])].includes('Files')) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDrop(true);
+}));
+['dragleave', 'dragend'].forEach(t => $('typed').addEventListener(t, () => setDrop(false)));
+$('typed').addEventListener('drop', e => {
+  setDrop(false);
+  const files = [...(e.dataTransfer?.files || [])];
+  if (!files.length) return;
+  e.preventDefault();
+  const imgs = files.filter(f => /^image\//.test(f.type));
+  if (!imgs.length){ toast('รับเฉพาะไฟล์รูป'); return; }
+  if (imgs.length < files.length) toast('ข้ามไฟล์ที่ไม่ใช่รูป');
+  addImgs(imgs);
+});
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
 $('typed').addEventListener('paste', e => {
   const cd = e.clipboardData; if (!cd) return;
   const imgs = [...(cd.files || [])].filter(f => /^image\//.test(f.type));
   if (!imgs.length) [...(cd.items || [])].forEach(it => { if (it.kind === 'file' && /^image\//.test(it.type)){ const f = it.getAsFile(); if (f) imgs.push(f); } });
   if (!imgs.length) return;
   e.preventDefault();
-  if ($('impFile').files.length + impPasted.length + imgs.length > 6){ toast('รวมได้ไม่เกิน 6 รูป'); return; }
-  impPasted.push(...imgs); impStatus(); toast('วางรูปแล้ว ✓', 1500);
+  addImgs(imgs);
 });
 function imgToB64(file){
   return new Promise((ok, no) => {
