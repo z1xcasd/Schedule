@@ -86,6 +86,9 @@ textarea{min-height:92px;resize:vertical}
 .irow.dup{opacity:.6}.irow .tag.upd{border-color:var(--accent);color:var(--accent)}.irow .tag{display:inline-block;font-size:12px;border:1px solid var(--warn);color:var(--warn);border-radius:99px;padding:0 8px;margin-left:6px}
 #typed.drop{border:2px dashed var(--accent);background-image:none;outline:none}
 #typed.drop::placeholder{color:var(--accent)}
+.seg{display:flex;gap:0;margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{flex:1;border:0;background:transparent;color:var(--muted);font:inherit;font-weight:600;padding:9px}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
 </style>
 </head>
 <body>
@@ -105,6 +108,7 @@ textarea{min-height:92px;resize:vertical}
   <textarea id="typed" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="พิมพ์ / วางข้อความ / วางรูป"></textarea>
   <div class="tprev" id="tPrev"></div>
   <div class="typehelp" id="impName" style="margin-top:6px"></div>
+  <div class="seg" id="aiSeg"><button type="button" data-ai="gemini">Gemini</button><button type="button" data-ai="claude">Claude</button></div>
   <label class="filebtn" for="impFile" style="margin-top:12px">📷 เลือกรูปจากอัลบั้ม</label>
   <input type="file" id="impFile" accept="image/*" multiple hidden>
   <div class="btns">
@@ -349,7 +353,7 @@ $('tGo').onclick = async () => {
     toast('กำลังอ่านวันที่/เวลา…', 8000);
     try{
       const t0 = p[0].replace(MON_RE, (all, dd, mo, yy) => dd + ' ' + MON_DOT[mo] + (yy ? ' ' + yy : ''));
-      const sv = await api('parse', { text: t0 });
+      const sv = await api('parse', { text: t0, ai: aiChoice });
       d = { date: (d && d.date) || sv.date || '', time: (d && d.time) || sv.time || '', end: (d && d.end) || '' };
     }catch(e){ toast(e.message, 4000); d = d || { date: '', time: '' }; }
     $('toast').classList.remove('show');
@@ -375,6 +379,10 @@ FORM_ORDER.forEach((id, i) => $(id).addEventListener('keydown', e => {
 }));
 let impRows = [];
 let impPasted = [];
+let aiChoice = store.get('ai') === 'claude' ? 'claude' : 'gemini';
+function paintAi(){ document.querySelectorAll('#aiSeg button').forEach(b => b.classList.toggle('on', b.dataset.ai === aiChoice)); }
+document.querySelectorAll('#aiSeg button').forEach(b => b.onclick = () => { aiChoice = b.dataset.ai; store.set('ai', aiChoice); paintAi(); });
+paintAi();
 function impStatus(){
   const nf = $('impFile').files.length, np = impPasted.length, parts = [];
   if (nf) parts.push('เลือก ' + nf + ' รูป');
@@ -438,7 +446,7 @@ async function aiImport(files, text){
   for (let i = 0; i < jobs.length; i++){
     toast(jobs.length > 1 ? 'กำลังอ่าน ' + (i + 1) + '/' + jobs.length + '…' : 'กำลังให้ Gemini แยกข้อมูล…', 90000);
     try{
-      const payload = jobs[i].f ? { image: await imgToB64(jobs[i].f), mime: 'image/jpeg' } : { text: jobs[i].text };
+      const payload = jobs[i].f ? { image: await imgToB64(jobs[i].f), mime: 'image/jpeg', ai: aiChoice } : { text: jobs[i].text, ai: aiChoice };
       all.push(...await api('importParse', payload));
     }catch(e){ bad.push((jobs[i].f ? 'รูปที่ ' + (i + 1) : 'ข้อความ') + ': ' + e.message); }
   }
@@ -467,7 +475,8 @@ async function aiImport(files, text){
     resetType(); showImp(); open('bgImp');
   }
   if (bad.length) toast('อ่านไม่สำเร็จ ' + bad.length + ' รายการ — ' + bad[0], 7000);
-  else if (all.some(r => r.source === 'claude')) toast('Gemini ใช้ไม่ได้ — อ่านโดย Claude (ตัวสำรอง)', 4000);
+  else if (aiChoice === 'gemini' && all.some(r => r.source === 'claude')) toast('Gemini ใช้ไม่ได้ — อ่านโดย Claude แทน', 4000);
+  else if (aiChoice === 'claude' && all.some(r => r.source === 'gemini')) toast('Claude ใช้ไม่ได้ — อ่านโดย Gemini แทน', 4000);
 }
 const IMP_F = [['time','เวลา'],['endTime','เวลาสิ้นสุด'],['location','สถานที่'],['chair','ผู้เกี่ยวข้อง'],['dress','การแต่งกาย'],['owner','ผู้รับผิดชอบ'],['details','รายละเอียด']];
 function impChanges(r){
