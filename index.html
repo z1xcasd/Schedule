@@ -90,6 +90,7 @@ textarea{min-height:92px;resize:vertical}
 .seg button{flex:1;border:0;background:transparent;color:var(--muted);font:inherit;font-weight:600;padding:9px}
 .seg button.on{background:var(--accent);color:var(--accent-ink)}
 .item a.map{color:var(--accent);text-decoration:underline;-webkit-touch-callout:none}
+.item .sub{white-space:pre-line}
 </style>
 </head>
 <body>
@@ -223,7 +224,7 @@ function render(){
       html += `<div class="day">${esc(fmtDay(it.date))}${dayBadge(it.date, t)}</div>`;
     }
     const locLine = it.location ? `<div class="sub">สถานที่ : ${it.mapLink ? `<a class="map" href="${esc(it.mapLink)}" target="_blank" rel="noopener">${esc(it.location)}</a>` : esc(it.location)}</div>` : '';
-    const subs = locLine + [it.chair && 'ผู้เกี่ยวข้อง : ' + it.chair, it.dress && 'การแต่งกาย : ' + it.dress, it.owner && 'ผู้รับผิดชอบ : ' + it.owner, it.details]
+    const subs = locLine + [it.chair && 'ผู้เกี่ยวข้อง : ' + it.chair, it.dress && 'การแต่งกาย : ' + it.dress, it.owner && 'ผู้รับผิดชอบ : ' + it.owner, it.details && 'รายละเอียด : ' + it.details]
       .filter(Boolean).map(x => `<div class="sub">${telLink(x)}</div>`).join('');
     html += `<div class="item" data-id="${esc(it.id)}"><div class="t">${esc(it.time)}${(it.endMs - it.startMs) !== 3600000 && it.endTime ? '<small>–' + esc(it.endTime) + '</small>' : ''}</div><div class="b"><div class="title">${esc(it.title)}</div>${subs}</div></div>`;
   }
