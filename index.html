@@ -104,6 +104,16 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .icon-btn,.btn.ghost,.seg button{background:#fff;-webkit-backdrop-filter:none;backdrop-filter:none}
 }
 @media (prefers-reduced-motion:reduce){.sheet{animation:none}.toast{transition:none}}
+.bell{pointer-events:auto;position:absolute;left:22px;bottom:calc(env(safe-area-inset-bottom) + 28px);width:48px;height:48px;border-radius:24px;padding:0;display:flex;align-items:center;justify-content:center;color:var(--next);background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);border:1px solid rgba(255,255,255,.75);box-shadow:var(--glass-edge),var(--glass-shadow)}
+.item.rem .t{color:#B86E00;display:flex;gap:4px;align-items:flex-start;font-size:14px}
+.item.rem .t svg{flex:none;margin-top:3px}
+.sw{position:relative;display:flex;align-items:center;justify-content:space-between;min-height:52px;margin:12px 0 0;padding:0 14px;border-radius:12px;background:#fff;border:1px solid var(--line);color:var(--ink);font-size:17px;cursor:pointer}
+.sw input{position:absolute;opacity:0;width:1px;height:1px;min-height:0}
+.sw i{flex:none;width:51px;height:31px;border-radius:16px;background:#E3E6EA;position:relative;transition:background .2s}
+.sw i::after{content:'';position:absolute;left:2px;top:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2);transition:transform .2s}
+.sw input:checked+i{background:#34C759}
+.sw input:checked+i::after{transform:translateX(20px)}
+.note3{margin-top:10px;padding:10px 14px;border-radius:12px;background:#F1F4F9;color:var(--muted);font-size:14px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -117,6 +127,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </div></div>
 
 <div class="dock">
+  <button class="bell" id="btnRem" aria-label="บันทึกเตือนความจำ"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button>
   <button class="fab" id="btnAdd" aria-label="เพิ่มนัด"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
 
@@ -188,6 +199,20 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   <div class="btns"><button class="btn ghost" data-close="bgAct">ปิด</button></div>
 </div></div>
 
+<div class="sheet-bg" id="bgRem"><div class="sheet">
+  <h2 id="rHead">บันทึกเตือนความจำ</h2>
+  <label>เรื่อง</label><input id="rTitle" enterkeyhint="done">
+  <label>วันที่</label><input id="rDate" type="date">
+  <label class="sw"><span>ทั้งวัน</span><input type="checkbox" id="rAll" checked><i></i></label>
+  <div id="rTimeBox" style="display:none"><label>เวลา</label><input id="rTime" type="time"></div>
+  <div class="note3" id="rNote"></div>
+  <label>รายละเอียด (ถ้ามี)</label><textarea id="rDet" style="min-height:64px"></textarea>
+  <div class="btns">
+    <button class="btn ghost" data-close="bgRem">ปิด</button>
+    <button class="btn" id="rSave">บันทึก</button>
+  </div>
+</div></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -228,6 +253,7 @@ function dayBadge(d, t){
   if (n === 1) return '<span class="soon">พรุ่งนี้</span>';
   return n > 1 ? `<span class="soon">อีก ${n} วัน</span>` : '';
 }
+const BELL_SM = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
 function render(){
   const el = $('list');
   const now = Date.now();
@@ -243,6 +269,10 @@ function render(){
     const locLine = it.location ? `<div class="sub">สถานที่ : ${it.mapLink ? `<a class="map" href="${esc(it.mapLink)}" target="_blank" rel="noopener">${esc(it.location)}</a>` : esc(it.location)}</div>` : '';
     const subs = locLine + [it.chair && 'ผู้เกี่ยวข้อง : ' + it.chair, it.dress && 'การแต่งกาย : ' + it.dress, it.owner && 'ผู้รับผิดชอบ : ' + it.owner, it.details && 'รายละเอียด : ' + it.details]
       .filter(Boolean).map(x => `<div class="sub">${telLink(x)}</div>`).join('');
+    if (it.rem){
+      html += `<div class="item rem" data-id="${esc(it.id)}"><div class="t">${BELL_SM}${it.allDay ? 'ทั้งวัน' : esc(it.time)}</div><div class="b"><div class="title">${esc(it.title)}</div>${it.details ? `<div class="sub">${telLink(it.details)}</div>` : ''}</div></div>`;
+      continue;
+    }
     html += `<div class="item" data-id="${esc(it.id)}"><div class="t">${esc(it.time)}${(it.endMs - it.startMs) !== 3600000 && it.endTime ? '<small>–' + esc(it.endTime) + '</small>' : ''}</div><div class="b"><div class="title">${esc(it.title)}</div>${subs}</div></div>`;
   }
   el.innerHTML = html + '</div>';
@@ -253,7 +283,7 @@ async function refresh(){
   if (!cfg.url || !cfg.token) { el.innerHTML = '<div class="empty">ยังไม่ได้ตั้งค่า<br>กรอกลิงก์และรหัสในหน้าต่างที่ขึ้นมา</div>'; return; }
   try{
     items = await api('list');
-    items.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
+    items.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time) || (b.rem ? 1 : 0) - (a.rem ? 1 : 0));
     render();
   }catch(e){ el.innerHTML = `<div class="empty">โหลดไม่ได้<br>${esc(e.message)}</div>`; }
 }
@@ -276,7 +306,8 @@ function bindPress(el){
 function openAct(id){
   cur = items.find(i => i.id === id); if (!cur) return;
   $('aTitle').textContent = cur.title;
-  $('aSub').textContent = fmtDay(cur.date) + ' · ' + cur.time;
+  $('aSub').textContent = fmtDay(cur.date) + ' · ' + (cur.allDay ? 'ทั้งวัน' : cur.time) + (cur.rem ? ' · เตือนความจำ' : '');
+  $('aHour').style.display = cur.allDay ? 'none' : '';
   $('aTel').innerHTML = phonesOf(cur).map(m => `<a class="act tel-act" href="tel:${m.replace(/\D/g, '')}">โทร ${esc(m)}</a>`).join('');
   open('bgAct');
 }
@@ -289,7 +320,12 @@ function shift(it, addMs){
 }
 async function doMove(addMs){
   close('bgAct'); toast('กำลังเลื่อน…', 8000);
-  const n = shift(cur, addMs);
+  const n = shift(cur.allDay ? Object.assign({}, cur, { time: '00:00' }) : cur, addMs);
+  if (cur.rem){
+    try{ await api('remSave', { id: cur.id, title: cur.title, date: n.date, allDay: cur.allDay, time: cur.allDay ? '' : n.time, details: cur.details }); toast('เลื่อนแล้ว ✓'); refresh(); }
+    catch(e){ toast(e.message, 4000); }
+    return;
+  }
   try{
     await api('update', { id: cur.id, title: cur.title, date: n.date, time: n.time, location: cur.location, chair: cur.chair, dress: cur.dress, owner: cur.owner, map: cur.map, details: cur.details });
     toast('เลื่อนแล้ว ✓'); refresh();
@@ -298,6 +334,7 @@ async function doMove(addMs){
 $('aHour').onclick = () => doMove(3600000);
 $('aTomorrow').onclick = () => doMove(86400000);
 $('aEdit').onclick = () => {
+  if (cur.rem){ close('bgAct'); openRem(cur); return; }
   close('bgAct'); editId = cur.id;
   $('cRaw').textContent = 'แก้ไขนัด';
   $('cTitle').value = cur.title; $('cDate').value = cur.date; $('cTime').value = cur.time;
@@ -309,7 +346,7 @@ $('aEdit').onclick = () => {
 $('aDel').onclick = async () => {
   if (!confirm('ยกเลิกนัด "' + cur.title + '" ?\nจะลบออกจากปฏิทินด้วย')) return;
   close('bgAct'); toast('กำลังยกเลิก…', 8000);
-  try{ await api('delete', { id: cur.id }); toast('ยกเลิกนัดแล้ว ✓'); refresh(); }
+  try{ await api('delete', { id: cur.id, rem: !!cur.rem }); toast(cur.rem ? 'ลบเตือนความจำแล้ว ✓' : 'ยกเลิกนัดแล้ว ✓'); refresh(); }
   catch(e){ toast(e.message, 4000); }
 };
 
@@ -585,6 +622,46 @@ $('cSave').onclick = async () => {
     close('bgConfirm'); toast(wasEdit ? 'แก้ไขแล้ว ✓' : 'เพิ่มนัดแล้ว ✓'); refresh();
   }catch(e){ toast(e.message, 4000); }
   btn.disabled = false; btn.textContent = 'บันทึกลงปฏิทิน';
+};
+
+let remId = '';
+function remNote(){
+  const all = $('rAll').checked;
+  $('rTimeBox').style.display = all ? 'none' : '';
+  let t = 'เตือนเวลา 07:30 ของวันนั้น';
+  if (!all){
+    const v = $('rTime').value;
+    t = v && v < '07:40' ? 'เตือนก่อนเวลา 10 นาที' : 'เตือน 2 ครั้ง: 07:30 ของวันนั้น และก่อนเวลา 10 นาที';
+  }
+  $('rNote').textContent = t;
+}
+function openRem(it){
+  remId = it ? it.id : '';
+  $('rHead').textContent = it ? 'แก้ไขเตือนความจำ' : 'บันทึกเตือนความจำ';
+  $('rTitle').value = it ? it.title : '';
+  $('rDate').value = it ? it.date : todayISO();
+  $('rAll').checked = it ? !!it.allDay : true;
+  $('rTime').value = it && !it.allDay ? it.time : '';
+  $('rDet').value = it ? it.details : '';
+  ['rTitle','rDate','rTime'].forEach(i => $(i).classList.remove('need'));
+  remNote(); open('bgRem');
+  if (!it) setTimeout(() => $('rTitle').focus(), 150);
+}
+$('btnRem').onclick = () => openRem(null);
+$('rAll').onchange = remNote;
+$('rTime').addEventListener('input', remNote);
+$('rTitle').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); $('rTitle').blur(); } });
+$('rSave').onclick = async () => {
+  const d = { id: remId, title: $('rTitle').value.trim(), date: $('rDate').value, allDay: $('rAll').checked, time: $('rTime').value, details: $('rDet').value.trim() };
+  ['rTitle','rDate','rTime'].forEach(i => $(i).classList.remove('need'));
+  const miss = [['title','rTitle'],['date','rDate']].concat(d.allDay ? [] : [['time','rTime']]).filter(([k]) => !d[k]);
+  if (miss.length){ miss.forEach(([,i]) => $(i).classList.add('need')); toast('กรอกเรื่อง วันที่' + (d.allDay ? '' : ' เวลา') + ' ให้ครบ'); return; }
+  const btn = $('rSave'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
+  try{
+    await api('remSave', d);
+    close('bgRem'); toast(remId ? 'แก้ไขเตือนความจำแล้ว ✓' : 'บันทึกเตือนความจำแล้ว ✓'); refresh();
+  }catch(e){ toast(e.message, 4000); }
+  btn.disabled = false; btn.textContent = 'บันทึก';
 };
 
 $('sSave').onclick = async () => {
