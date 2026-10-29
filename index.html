@@ -36,6 +36,11 @@ header{display:flex;align-items:center;justify-content:space-between;padding:8px
 header h1{margin:0;font-size:30px;line-height:1.25;font-weight:700}
 .icon-btn{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:22px;padding:0;color:var(--ink);background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);border:1px solid rgba(255,255,255,.75);box-shadow:var(--glass-edge),var(--glass-shadow)}
 main{display:block}
+.stat{min-height:18px;margin-top:1px;font-size:13px;line-height:1.4;color:var(--muted)}
+.loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:44px 0;color:var(--muted);font-size:15px}
+.spin{width:28px;height:28px;border-radius:50%;border:3px solid rgba(46,107,208,.2);border-top-color:var(--accent);animation:sp .9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
 .day{padding:16px 2px 6px;font-size:13.5px;line-height:1.5;font-weight:700;letter-spacing:.02em;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .day span{display:inline-flex;align-items:center;min-height:24px;padding:0 10px;border-radius:12px;font-size:12.5px;font-weight:600;letter-spacing:0}
 .day .soon{color:var(--next);background:var(--glass);border:1px solid rgba(255,255,255,.75);box-shadow:var(--glass-edge),0 1px 3px rgba(40,70,130,.08)}
@@ -120,7 +125,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <div class="bg" aria-hidden="true"><i style="top:-60px;left:-60px;width:300px;height:300px;background:#B9D2F6;filter:blur(40px);opacity:.75"></i><i style="top:28%;right:-90px;width:320px;height:320px;background:#D6CDF5;filter:blur(46px);opacity:.65"></i><i style="top:56%;left:-50px;width:220px;height:220px;background:#FBDCC8;filter:blur(44px);opacity:.55"></i><i style="bottom:-70px;left:18%;width:340px;height:250px;background:#C6EADF;filter:blur(46px);opacity:.65"></i></div>
 <div class="wrap"><div class="pane">
 <header>
-  <h1>ตารางงาน</h1>
+  <div><h1>ตารางงาน</h1><div class="stat" id="stat"></div></div>
   <button class="icon-btn" id="btnRef" aria-label="รีเฟรช"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
 </header>
 <main id="list"></main>
@@ -278,14 +283,45 @@ function render(){
   el.innerHTML = html + '</div>';
   el.querySelectorAll('.item').forEach(bindPress);
 }
+const CACHE_KEY = 'schedule_cache_v1';
+let have = false, stamp = 0, reqSeq = 0;
+function readCache(){
+  try{
+    const o = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (o && Array.isArray(o.items) && o.url === cfg.url && o.t) return o;
+  }catch(e){}
+  return null;
+}
+function writeCache(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ url: cfg.url, t: stamp, items })); }catch(e){} }
+function clearCache(){ try{ localStorage.removeItem(CACHE_KEY); }catch(e){} items = []; have = false; stamp = 0; }
+function setStat(t){ $('stat').textContent = t; }
+function whenTxt(ms){
+  const d = new Date(ms), o = { timeZone: 'Asia/Bangkok' };
+  const hm = d.toLocaleTimeString('en-GB', { ...o, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const day = d.toLocaleDateString('sv-SE', o);
+  return day === todayISO() ? hm : d.toLocaleDateString('th-TH', { ...o, day: 'numeric', month: 'short' }) + ' ' + hm;
+}
 async function refresh(){
   const el = $('list');
-  if (!cfg.url || !cfg.token) { el.innerHTML = '<div class="empty">ยังไม่ได้ตั้งค่า<br>กรอกลิงก์และรหัสในหน้าต่างที่ขึ้นมา</div>'; return; }
+  if (!cfg.url || !cfg.token) { setStat(''); el.innerHTML = '<div class="empty">ยังไม่ได้ตั้งค่า<br>กรอกลิงก์และรหัสในหน้าต่างที่ขึ้นมา</div>'; return; }
+  const my = ++reqSeq;
+  if (!have){
+    const c = readCache();
+    if (c){ items = c.items; stamp = c.t; have = true; render(); }
+    else el.innerHTML = '<div class="loading"><div class="spin"></div>กำลังโหลด…</div>';
+  }
+  setStat('กำลังอัปเดต…');
   try{
-    items = await api('list');
-    items.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time) || (b.rem ? 1 : 0) - (a.rem ? 1 : 0));
-    render();
-  }catch(e){ el.innerHTML = `<div class="empty">โหลดไม่ได้<br>${esc(e.message)}</div>`; }
+    const data = await api('list');
+    if (my !== reqSeq) return;
+    data.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time) || (b.rem ? 1 : 0) - (a.rem ? 1 : 0));
+    items = data; stamp = Date.now(); have = true;
+    writeCache(); render(); setStat('');
+  }catch(e){
+    if (my !== reqSeq) return;
+    if (have) setStat('ออฟไลน์ · ข้อมูลเมื่อ ' + whenTxt(stamp));
+    else { setStat(''); el.innerHTML = `<div class="empty">โหลดไม่ได้<br>${esc(e.message)}</div>`; }
+  }
 }
 setInterval(render, 60000);
 
@@ -665,7 +701,9 @@ $('rSave').onclick = async () => {
 };
 
 $('sSave').onclick = async () => {
-  cfg = { url: $('sUrl').value.trim(), token: $('sTok').value.trim() };
+  const nu = $('sUrl').value.trim(), nt = $('sTok').value.trim();
+  if (nu !== cfg.url || nt !== cfg.token) clearCache();
+  cfg = { url: nu, token: nt };
   store.set('url', cfg.url); store.set('token', cfg.token);
   try{ await api('ping'); close('bgSet'); toast('เชื่อมต่อสำเร็จ ✓'); refresh(); }
   catch(e){ toast('เชื่อมต่อไม่ได้: ' + e.message, 4000); }
