@@ -699,9 +699,20 @@ function paintPend(){
   b.style.display = pendN || pendReading ? '' : 'none';
   b.textContent = [pendN && 'รอบันทึก ' + pendN, pendReading && (pendN ? 'อ่าน ' + pendReading : 'กำลังอ่าน ' + pendReading + ' รูป')].filter(Boolean).join(' · ');
 }
+// เปิดจากปุ่ม "บันทึก" ใน Telegram (?pend=1): เปิดหน้ารอบันทึกให้เลย 1 ครั้ง
+let autoPend = /[?&]pend=1/.test(location.search);
+if (autoPend) { try{ history.replaceState(null, '', location.pathname + location.hash); }catch(e){} }
+// อยู่ใน Telegram: ขยายหน้าต่างให้เต็มจอ
+if (/tgWebAppData|tgWebAppVersion/.test(location.hash)) {
+  const sc = document.createElement('script');
+  sc.src = 'https://telegram.org/js/telegram-web-app.js';
+  sc.onload = () => { try{ Telegram.WebApp.ready(); Telegram.WebApp.expand(); }catch(e){} };
+  document.head.appendChild(sc);
+}
 async function pendCount(){
   try{ const c = await api('pendCount'); pendN = c.n; pendReading = c.reading; }catch(e){ return; }
   paintPend();
+  if (autoPend && pendN){ autoPend = false; $('btnPend').click(); }
   clearTimeout(pendTimer);
   if (pendReading) pendTimer = setTimeout(pendCount, 20000);   // ระหว่างกำลังอ่าน เช็กใหม่ทุก 20 วินาที
 }
