@@ -36,6 +36,13 @@ header{display:flex;align-items:center;justify-content:space-between;padding:8px
 header h1{margin:0;font-size:30px;line-height:1.25;font-weight:700}
 .icon-btn{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:22px;padding:0;color:var(--ink);background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);border:1px solid rgba(255,255,255,.75);box-shadow:var(--glass-edge),var(--glass-shadow)}
 main{display:block}
+.hdr-r{display:flex;align-items:center;gap:8px}
+.pend{display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:18px;font:inherit;font-size:14px;font-weight:600;color:#fff;background:#D9822B;border:1px solid rgba(255,255,255,.4);box-shadow:0 4px 12px rgba(217,130,43,.3)}
+.pday{display:flex;align-items:center;gap:10px;margin:0;padding:14px 2px 6px;font-weight:700;font-size:14.5px;color:var(--muted);cursor:pointer}
+.pday input{width:auto;min-height:0;margin:0;transform:scale(1.3);accent-color:var(--accent);box-shadow:none}
+.irow .ed{margin-left:auto;flex:none;align-self:center;padding:8px 0 8px 10px;border:0;background:none;font:inherit;font-size:14px;font-weight:600;color:var(--next)}
+.irow>div{min-width:0}
+.btn.del{flex:0 0 auto;color:#9B2C1F;background:#fff;border:1px solid #E8B4AC;box-shadow:none;font-weight:600}
 .stat{min-height:18px;margin-top:1px;font-size:13px;line-height:1.4;color:var(--muted)}
 .loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:44px 0;color:var(--muted);font-size:15px}
 .spin{width:28px;height:28px;border-radius:50%;border:3px solid rgba(46,107,208,.2);border-top-color:var(--accent);animation:sp .9s linear infinite}
@@ -126,7 +133,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <div class="wrap"><div class="pane">
 <header>
   <div><h1>ตารางงาน</h1><div class="stat" id="stat"></div></div>
-  <button class="icon-btn" id="btnRef" aria-label="รีเฟรช"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+  <span class="hdr-r"><button class="pend" id="btnPend" style="display:none"></button><button class="icon-btn" id="btnRef" aria-label="รีเฟรช"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button></span>
 </header>
 <main id="list"></main>
 </div></div>
@@ -152,11 +159,12 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </div></div>
 
 <div class="sheet-bg" id="bgImp"><div class="sheet">
-  <h2>ตรวจสอบรายการ</h2>
+  <h2 id="impHead">ตรวจสอบรายการ</h2>
   <div class="typehelp" id="impSum"></div>
   <div id="impList"></div>
   <div class="btns">
     <button class="btn ghost" data-close="bgImp">ปิด</button>
+    <button class="btn del" id="impDel" style="display:none">ลบ</button>
     <button class="btn" id="impSave">บันทึกที่เลือก</button>
   </div>
 </div></div>
@@ -232,7 +240,7 @@ let rawText = '', items = [], editId = '', cur = null;
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function toast(msg, ms=2600){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),ms); }
 function open(id){ $(id).classList.add('show'); }
-function close(id){ $(id).classList.remove('show'); if (id === 'bgConfirm') editId = ''; }
+function close(id){ $(id).classList.remove('show'); if (id === 'bgConfirm'){ editId = ''; revEdit = null; } }
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => close(b.dataset.close));
 
 const todayISO = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' });
@@ -317,6 +325,7 @@ async function refresh(){
     data.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time) || (b.rem ? 1 : 0) - (a.rem ? 1 : 0));
     items = data; stamp = Date.now(); have = true;
     writeCache(); render(); setStat('');
+    pendCount();
   }catch(e){
     if (my !== reqSeq) return;
     if (have) setStat('ออฟไลน์ · ข้อมูลเมื่อ ' + whenTxt(stamp));
@@ -566,7 +575,7 @@ async function aiImport(files, text){
     $('cHint').textContent = need.length ? 'อ่าน ' + need.join(', ') + ' ไม่ได้ กรอกเองก่อนบันทึก' : '';
     resetType(); open('bgConfirm');
   } else {
-    resetType(); showImp(); open('bgImp');
+    resetType(); impMode = 'imp'; showImp(); open('bgImp');
   }
   if (bad.length) toast('อ่านไม่สำเร็จ ' + bad.length + ' รายการ — ' + bad[0], 7000);
   else if (aiChoice === 'gemini' && all.some(r => r.source === 'claude')) toast('Gemini ใช้ไม่ได้ — อ่านโดย Claude แทน', 4000);
@@ -578,47 +587,118 @@ function impChanges(r){
   const old = Object.assign({}, m, { endTime: m.span !== 3600000 ? m.endTime : '' });
   return IMP_F.filter(([k]) => r[k] && r[k] !== old[k]).map(([k, label]) => ({ label, from: old[k] || '—', to: r[k] }));
 }
+let impMode = 'imp', revEdit = null;   // imp = เพิ่มรูป/ข้อความในแอป, pend = รอบันทึกจากคำสั่งลัด
+const TH_WD = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'], TH_MO = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const dayShort = d => { const [y, m, dd] = d.split('-').map(Number), w = new Date(Date.UTC(y, m - 1, dd)).getUTCDay(); return TH_WD[w] + ' ' + dd + ' ' + TH_MO[m - 1] + ' ' + String(y + 543).slice(-2); };
+function rowOk(r){ return !!(r.title && r.date && (r.time || r.match)); }
 function showImp(){
+  $('impHead').textContent = impMode === 'pend' ? 'รอบันทึก' : 'ตรวจสอบรายการ';
+  $('impDel').style.display = impMode === 'pend' ? '' : 'none';
+  const groups = {};
+  impRows.forEach((r, i) => { const k = r.date || '~'; (groups[k] = groups[k] || []).push(i); });
   let h = '';
-  impRows.forEach((r, i) => {
-    const m = r.match, ch = impChanges(r);
-    const ok = !!(r.title && r.date && (r.time || m));
-    const on = ok && (!m || ch.length);
-    let tag = '', sub;
-    if (m){
-      tag = ch.length ? '<span class="tag upd">อัปเดตงานเดิม</span>' : '<span class="tag">ไม่มีการเปลี่ยนแปลง</span>';
-      sub = ch.map(c => `<div class="ss">${esc(c.label)} : ${esc(c.from)} → <b>${esc(c.to)}</b></div>`).join('');
-    } else {
-      sub = [r.location && 'สถานที่ : ' + r.location, r.chair && 'ผู้เกี่ยวข้อง : ' + r.chair, r.dress && 'การแต่งกาย : ' + r.dress, r.owner && 'ผู้รับผิดชอบ : ' + r.owner]
-        .filter(Boolean).map(x => `<div class="ss">${esc(x)}</div>`).join('');
-    }
-    if (!ok) tag += '<span class="tag">ข้อมูลไม่ครบ</span>';
-    const time = r.time || (m && m.time) || '--:--';
-    h += `<label class="irow${m && !ch.length ? ' dup' : ''}"><input type="checkbox" data-i="${i}" ${on ? 'checked' : ''} ${ok ? '' : 'disabled'}>
-      <div><div class="tt">${esc(r.date ? new Date(r.date + 'T00:00:00+07:00').toLocaleDateString('th-TH', { weekday:'short', day:'numeric', month:'short', timeZone:'Asia/Bangkok' }) : '(ไม่มีวันที่)')} · ${esc(time)}${r.endTime ? '–' + esc(r.endTime) : ''}
-      ${tag}</div>
-      <div>${esc((m ? m.title : r.title) || '(ไม่มีเรื่อง)')}</div>${sub}</div></label>`;
+  Object.keys(groups).sort().forEach(k => {
+    const idx = groups[k];
+    h += `<label class="pday"><input type="checkbox" data-day="${esc(k)}">${k === '~' ? '(ไม่มีวันที่)' : esc(dayShort(k))} · ${idx.length} รายการ</label>`;
+    idx.sort((a, b) => (impRows[a].time || '').localeCompare(impRows[b].time || '')).forEach(i => {
+      const r = impRows[i], m = r.match, ch = impChanges(r), ok = rowOk(r);
+      const on = r._on !== undefined ? r._on : ok && (!m || ch.length);
+      let tag = '', sub;
+      if (m){
+        tag = ch.length ? '<span class="tag upd">อัปเดตงานเดิม</span>' : '<span class="tag">ไม่มีการเปลี่ยนแปลง</span>';
+        sub = ch.map(c => `<div class="ss">${esc(c.label)} : ${esc(c.from)} → <b>${esc(c.to)}</b></div>`).join('');
+      } else {
+        sub = [r.location && 'สถานที่ : ' + r.location, r.chair && 'ผู้เกี่ยวข้อง : ' + r.chair, r.dress && 'การแต่งกาย : ' + r.dress, r.owner && 'ผู้รับผิดชอบ : ' + r.owner]
+          .filter(Boolean).map(x => `<div class="ss">${esc(x)}</div>`).join('');
+      }
+      if (!ok) tag += '<span class="tag">ข้อมูลไม่ครบ</span>';
+      const time = r.time || (m && m.time) || '--:--';
+      h += `<label class="irow${m && !ch.length ? ' dup' : ''}"><input type="checkbox" data-i="${i}" data-day="${esc(k)}" ${on && ok ? 'checked' : ''} ${ok ? '' : 'disabled'}>
+        <div><div class="tt">${esc(time)}${r.endTime ? '–' + esc(r.endTime) : ''} ${tag}</div>
+        <div>${esc((m ? m.title : r.title) || '(ไม่มีเรื่อง)')}</div>${sub}</div><button type="button" class="ed" data-ed="${i}">แก้ไข</button></label>`;
+    });
   });
-  $('impList').innerHTML = h || '<div class="empty">ไม่พบรายการในตาราง</div>';
-  $('impList').querySelectorAll('input').forEach(c => c.onchange = updImpCount);
+  $('impList').innerHTML = h || '<div class="empty">' + (impMode === 'pend' ? 'ไม่มีรายการรอบันทึก' : 'ไม่พบรายการในตาราง') + '</div>';
+  $('impList').querySelectorAll('input[data-i]').forEach(c => c.onchange = () => { impRows[+c.dataset.i]._on = c.checked; updImpCount(); });
+  $('impList').querySelectorAll('.pday input').forEach(c => c.onchange = () => {
+    $('impList').querySelectorAll(`input[data-i][data-day="${c.dataset.day}"]:not(:disabled)`).forEach(x => { x.checked = c.checked; impRows[+x.dataset.i]._on = c.checked; });
+    updImpCount();
+  });
+  $('impList').querySelectorAll('.ed').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); editRow(+b.dataset.ed); });
   updImpCount();
 }
 function updImpCount(){
-  const sel = [...$('impList').querySelectorAll('input:checked')].map(c => impRows[+c.dataset.i]);
+  $('impList').querySelectorAll('.pday input').forEach(c => {
+    const all = [...$('impList').querySelectorAll(`input[data-i][data-day="${c.dataset.day}"]:not(:disabled)`)];
+    const n = all.filter(x => x.checked).length;
+    c.checked = all.length > 0 && n === all.length; c.indeterminate = n > 0 && n < all.length; c.disabled = !all.length;
+  });
+  const sel = [...$('impList').querySelectorAll('input[data-i]:checked')].map(c => impRows[+c.dataset.i]);
   const nu = sel.filter(r => r.match).length, na = sel.length - nu;
-  $('impSum').textContent = 'พบ ' + impRows.length + ' รายการ · เลือกเพิ่มใหม่ ' + na + ' · อัปเดตงานเดิม ' + nu;
-  $('impSave').textContent = 'บันทึกที่เลือก (' + sel.length + ')'; $('impSave').disabled = !sel.length;
+  $('impSum').textContent = (impMode === 'pend' ? 'จากคำสั่งลัด · ' : '') + 'พบ ' + impRows.length + ' รายการ · เลือกเพิ่มใหม่ ' + na + ' · อัปเดตงานเดิม ' + nu;
+  $('impSave').textContent = 'บันทึก ' + sel.length + ' รายการ'; $('impSave').disabled = !sel.length;
+  $('impDel').disabled = !sel.length;
+}
+function selRows(){ return [...$('impList').querySelectorAll('input[data-i]:checked')].map(c => impRows[+c.dataset.i]); }
+// แก้ไขรายการก่อนบันทึก: เปิดฟอร์มเดิม (งานที่ตรงกับงานเดิม = แก้งานเดิม)
+function editRow(i){
+  const r = impRows[i], m = r.match;
+  revEdit = i; editId = m ? m.id : ''; rawText = impMode === 'pend' ? 'คำสั่งลัด' : 'นำเข้าตาราง';
+  $('cRaw').textContent = m ? 'แก้ไขก่อนบันทึก (อัปเดตงานเดิม)' : 'แก้ไขก่อนบันทึก';
+  $('cDate').value = r.date || ''; $('cTime').value = r.time || (m && m.time) || '';
+  $('cEnd').value = r.endTime || (m && m.span !== 3600000 ? m.endTime : '') || '';
+  $('cTitle').value = m ? m.title : (r.title || '');
+  $('cLoc').value = r.location || (m && m.location) || ''; $('cMap').value = (m && m.map) || '';
+  $('cChair').value = r.chair || (m && m.chair) || ''; $('cDress').value = r.dress || (m && m.dress) || '';
+  $('cOwner').value = r.owner || (m && m.owner) || ''; $('cDet').value = r.details || (m && m.details) || '';
+  const need = []; if (!$('cDate').value) need.push('วันที่'); if (!$('cTime').value) need.push('เวลา'); if (!$('cTitle').value) need.push('เรื่อง');
+  $('cHint').style.display = need.length ? 'block' : 'none';
+  $('cHint').textContent = need.length ? 'กรอก ' + need.join(', ') + ' ให้ครบก่อนบันทึก' : '';
+  open('bgConfirm');
+}
+// หลังบันทึกจากฟอร์มแก้ไขสำเร็จ: เอารายการนั้นออกจากหน้ารายการ
+async function afterRowSaved(i){
+  const r = impRows[i];
+  impRows.splice(i, 1);
+  if (impMode === 'pend' && r && r.pid){ try{ await api('pendDel', { pids: [r.pid] }); }catch(e){} pendCount(); }
+  if (impRows.length) showImp(); else close('bgImp');
 }
 $('impSave').onclick = async () => {
-  const rows = [...$('impList').querySelectorAll('input:checked')].map(c => { const r = impRows[+c.dataset.i]; return Object.assign({}, r, { match: undefined, matchId: r.match ? r.match.id : '' }); });
-  if (!rows.length) return;
+  const sel = selRows();
+  if (!sel.length) return;
   const btn = $('impSave'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
-  toast('กำลังบันทึก ' + rows.length + ' รายการ…', 120000);
+  toast('กำลังบันทึก ' + sel.length + ' รายการ…', 120000);
   try{
-    const r = await api('addMany', { rows });
+    const r = impMode === 'pend'
+      ? await api('pendSave', { pids: sel.map(x => x.pid) })
+      : await api('addMany', { rows: sel.map(x => Object.assign({}, x, { match: undefined, _on: undefined, matchId: x.match ? x.match.id : '' })) });
     close('bgImp'); refresh();
     toast([r.added && 'เพิ่ม ' + r.added, r.updated && 'อัปเดต ' + r.updated].filter(Boolean).join(' · ') + ' ✓' + (r.failed.length ? ' · ไม่สำเร็จ ' + r.failed.length : ''), 5000);
   }catch(e){ toast(e.message, 5000); btn.disabled = false; updImpCount(); }
+};
+$('impDel').onclick = async () => {
+  const sel = selRows();
+  if (!sel.length || !confirm('ลบ ' + sel.length + ' รายการที่เลือกออกจากรอบันทึก?')) return;
+  try{
+    await api('pendDel', { pids: sel.map(x => x.pid) });
+    impRows = impRows.filter(x => !sel.includes(x));
+    toast('ลบแล้ว ✓'); pendCount();
+    if (impRows.length) showImp(); else close('bgImp');
+  }catch(e){ toast(e.message, 4000); }
+};
+// ปุ่ม "รอบันทึก n" บนหัวแอป
+let pendN = 0;
+function paintPend(){ const b = $('btnPend'); b.style.display = pendN ? '' : 'none'; b.textContent = 'รอบันทึก ' + pendN; }
+async function pendCount(){ try{ pendN = await api('pendCount'); }catch(e){ return; } paintPend(); }
+$('btnPend').onclick = async () => {
+  toast('กำลังโหลดรายการรอบันทึก…', 30000);
+  try{
+    impRows = await api('pendList'); impMode = 'pend';
+    $('toast').classList.remove('show');
+    pendN = impRows.length; paintPend();
+    if (!impRows.length){ toast('ไม่มีรายการรอบันทึก'); return; }
+    showImp(); open('bgImp');
+  }catch(e){ toast(e.message, 4000); }
 };
 
 $('btnRef').onclick = () => { toast('กำลังรีเฟรช…', 1200); refresh(); };
@@ -653,9 +733,10 @@ $('cSave').onclick = async () => {
   if (miss.length){ miss.forEach(([,i]) => $(i).classList.add('need')); toast('กรอกเรื่อง วันที่ เวลา ให้ครบ'); return; }
   const btn = $('cSave'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
   try{
-    const wasEdit = !!editId;
+    const wasEdit = !!editId, fromRev = revEdit;
     await api(wasEdit ? 'update' : 'add', d);
     close('bgConfirm'); toast(wasEdit ? 'แก้ไขแล้ว ✓' : 'เพิ่มนัดแล้ว ✓'); refresh();
+    if (fromRev !== null) afterRowSaved(fromRev);
   }catch(e){ toast(e.message, 4000); }
   btn.disabled = false; btn.textContent = 'บันทึกลงปฏิทิน';
 };
