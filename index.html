@@ -33,11 +33,11 @@ html,body{margin:0;background:#EEF3FB;color:var(--ink);font-family:'Sarabun',sys
 .wrap{position:relative;z-index:1;max-width:560px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 12px) 16px 130px;min-height:100vh}
 .pane{border-radius:28px;padding:8px 16px 18px;background:rgba(255,255,255,.34);-webkit-backdrop-filter:blur(30px) saturate(180%);backdrop-filter:blur(30px) saturate(180%);border:1px solid rgba(255,255,255,.8);box-shadow:var(--glass-edge),0 24px 60px rgba(40,70,130,.12)}
 header{display:flex;align-items:center;justify-content:space-between;padding:8px 0 4px}
-header h1{margin:0;font-size:30px;line-height:1.25;font-weight:700}
+header h1{white-space:nowrap;margin:0;font-size:30px;line-height:1.25;font-weight:700}
 .icon-btn{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:22px;padding:0;color:var(--ink);background:var(--glass);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);border:1px solid rgba(255,255,255,.75);box-shadow:var(--glass-edge),var(--glass-shadow)}
 main{display:block}
 .hdr-r{display:flex;align-items:center;gap:8px}
-.pend{display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:18px;font:inherit;font-size:14px;font-weight:600;color:#fff;background:#D9822B;border:1px solid rgba(255,255,255,.4);box-shadow:0 4px 12px rgba(217,130,43,.3)}
+.pend{white-space:nowrap;display:inline-flex;align-items:center;height:34px;padding:0 12px;border-radius:17px;font:inherit;font-size:13px;font-weight:600;color:#fff;background:#D9822B;border:1px solid rgba(255,255,255,.4);box-shadow:0 4px 12px rgba(217,130,43,.3)}
 .pday{display:flex;align-items:center;gap:10px;margin:0;padding:14px 2px 6px;font-weight:700;font-size:14.5px;color:var(--muted);cursor:pointer}
 .pday input{width:auto;min-height:0;margin:0;transform:scale(1.3);accent-color:var(--accent);box-shadow:none}
 .irow .ed{margin-left:auto;flex:none;align-self:center;padding:8px 0 8px 10px;border:0;background:none;font:inherit;font-size:14px;font-weight:600;color:var(--next)}
@@ -595,13 +595,18 @@ function showImp(){
   $('impHead').textContent = impMode === 'pend' ? 'รอบันทึก' : 'ตรวจสอบรายการ';
   $('impDel').style.display = impMode === 'pend' ? '' : 'none';
   const groups = {};
-  impRows.forEach((r, i) => { const k = r.date || '~'; (groups[k] = groups[k] || []).push(i); });
+  impRows.forEach((r, i) => { const k = r.err ? '!' : (r.date || '~'); (groups[k] = groups[k] || []).push(i); });
   let h = '';
   Object.keys(groups).sort().forEach(k => {
     const idx = groups[k];
-    h += `<label class="pday"><input type="checkbox" data-day="${esc(k)}">${k === '~' ? '(ไม่มีวันที่)' : esc(dayShort(k))} · ${idx.length} รายการ</label>`;
+    h += `<label class="pday"><input type="checkbox" data-day="${esc(k)}">${k === '!' ? 'อ่านไม่สำเร็จ (เลือกแล้วกดลบ)' : k === '~' ? '(ไม่มีวันที่)' : esc(dayShort(k))} · ${idx.length} รายการ</label>`;
     idx.sort((a, b) => (impRows[a].time || '').localeCompare(impRows[b].time || '')).forEach(i => {
       const r = impRows[i], m = r.match, ch = impChanges(r), ok = rowOk(r);
+      if (r.err){
+        h += `<label class="irow"><input type="checkbox" data-i="${i}" data-day="!" ${r._on ? 'checked' : ''}>
+          <div><div class="tt"><span class="tag">อ่านไม่สำเร็จ</span></div><div class="ss">${esc(r.err)}</div></div></label>`;
+        return;
+      }
       const on = r._on !== undefined ? r._on : ok && (!m || ch.length);
       let tag = '', sub;
       if (m){
@@ -633,11 +638,12 @@ function updImpCount(){
     const n = all.filter(x => x.checked).length;
     c.checked = all.length > 0 && n === all.length; c.indeterminate = n > 0 && n < all.length; c.disabled = !all.length;
   });
-  const sel = [...$('impList').querySelectorAll('input[data-i]:checked')].map(c => impRows[+c.dataset.i]);
+  const all = [...$('impList').querySelectorAll('input[data-i]:checked')].map(c => impRows[+c.dataset.i]);
+  const sel = all.filter(r => !r.err);
   const nu = sel.filter(r => r.match).length, na = sel.length - nu;
   $('impSum').textContent = (impMode === 'pend' ? 'จากคำสั่งลัด · ' : '') + 'พบ ' + impRows.length + ' รายการ · เลือกเพิ่มใหม่ ' + na + ' · อัปเดตงานเดิม ' + nu;
   $('impSave').textContent = 'บันทึก ' + sel.length + ' รายการ'; $('impSave').disabled = !sel.length;
-  $('impDel').disabled = !sel.length;
+  $('impDel').disabled = !all.length;
 }
 function selRows(){ return [...$('impList').querySelectorAll('input[data-i]:checked')].map(c => impRows[+c.dataset.i]); }
 // แก้ไขรายการก่อนบันทึก: เปิดฟอร์มเดิม (งานที่ตรงกับงานเดิม = แก้งานเดิม)
@@ -664,7 +670,7 @@ async function afterRowSaved(i){
   if (impRows.length) showImp(); else close('bgImp');
 }
 $('impSave').onclick = async () => {
-  const sel = selRows();
+  const sel = selRows().filter(r => !r.err);
   if (!sel.length) return;
   const btn = $('impSave'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
   toast('กำลังบันทึก ' + sel.length + ' รายการ…', 120000);
@@ -687,10 +693,20 @@ $('impDel').onclick = async () => {
   }catch(e){ toast(e.message, 4000); }
 };
 // ปุ่ม "รอบันทึก n" บนหัวแอป
-let pendN = 0;
-function paintPend(){ const b = $('btnPend'); b.style.display = pendN ? '' : 'none'; b.textContent = 'รอบันทึก ' + pendN; }
-async function pendCount(){ try{ pendN = await api('pendCount'); }catch(e){ return; } paintPend(); }
+let pendN = 0, pendReading = 0, pendTimer = null;
+function paintPend(){
+  const b = $('btnPend');
+  b.style.display = pendN || pendReading ? '' : 'none';
+  b.textContent = [pendN && 'รอบันทึก ' + pendN, pendReading && (pendN ? 'อ่าน ' + pendReading : 'กำลังอ่าน ' + pendReading + ' รูป')].filter(Boolean).join(' · ');
+}
+async function pendCount(){
+  try{ const c = await api('pendCount'); pendN = c.n; pendReading = c.reading; }catch(e){ return; }
+  paintPend();
+  clearTimeout(pendTimer);
+  if (pendReading) pendTimer = setTimeout(pendCount, 20000);   // ระหว่างกำลังอ่าน เช็กใหม่ทุก 20 วินาที
+}
 $('btnPend').onclick = async () => {
+  if (!pendN && pendReading){ toast('กำลังอ่าน… รอสักครู่ รายการจะขึ้นเอง'); return; }
   toast('กำลังโหลดรายการรอบันทึก…', 30000);
   try{
     impRows = await api('pendList'); impMode = 'pend';
