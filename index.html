@@ -676,7 +676,7 @@ $('impSave').onclick = async () => {
   toast('กำลังบันทึก ' + sel.length + ' รายการ…', 120000);
   try{
     const r = impMode === 'pend'
-      ? await api('pendSave', { pids: sel.map(x => x.pid) })
+      ? await api('pendSave', { pids: sel.map(x => x.pid), drop: impRows.filter(x => x.pid && !sel.includes(x)).map(x => x.pid) })
       : await api('addMany', { rows: sel.map(x => Object.assign({}, x, { match: undefined, _on: undefined, matchId: x.match ? x.match.id : '' })) });
     close('bgImp'); refresh();
     toast([r.added && 'เพิ่ม ' + r.added, r.updated && 'อัปเดต ' + r.updated].filter(Boolean).join(' · ') + ' ✓' + (r.failed.length ? ' · ไม่สำเร็จ ' + r.failed.length : ''), 5000);
